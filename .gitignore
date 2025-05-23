@@ -1,0 +1,8 @@
+.env
+datasets
+datasets/**
+*.csv
+__pycache__
+aco_env
+aco_env/*
+**/**/__pycache__
