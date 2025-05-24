@@ -32,10 +32,10 @@ def calculate_terms_probs(terms : list,
                           ) -> list:
     probs = []
     for term in terms:
-        tau = pheromones[term] ** alpha
-        eta = heuristics[term] ** beta
-        x = 0 if term[0] in used_attrs else 1
-        probs.append(x * tau * eta)
+        if term[0] not in used_attrs:
+            tau = pheromones[term] ** alpha
+            eta = heuristics[term] ** beta
+            probs.append(tau * eta)
     probs_sum = sum(probs)
     probs = [p / probs_sum for p in probs]
 
@@ -51,13 +51,14 @@ def select_term(terms : list,
                 used_attrs: list, 
                 p : list
                 ) -> tuple:
-    indices = np.arange(len(terms))
-    selected_index = np.random.choice(indices, p=p)
+    
 
-    # TODO: handle the case where it get stuck in the loop
-    while terms[selected_index][0] in used_attrs:
-        selected_index = np.random.choice(terms, p=p)
-    selected_term = terms[selected_index]
+    # remove the terms that are already used
+    available_terms = [term for term in terms if term[0] not in used_attrs]
+
+    indices = np.arange(len(available_terms))
+    selected_index = np.random.choice(indices, p=p)
+    selected_term = available_terms[selected_index]
 
     return selected_term
     

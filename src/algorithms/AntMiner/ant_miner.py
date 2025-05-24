@@ -106,12 +106,12 @@ class AntMiner:
         return rule
 
 
-    def _prune_rule(self, rule : list, uncovered_data : pd.DataFrame) -> list:
+    def _prune_rule(self, rule : list, data : pd.DataFrame) -> list:
         """
         Prune the rule by removing terms until no further improvement is possible.
         """
         
-        best_quality = evaluate_rule(rule=rule, data=uncovered_data)
+        best_quality = evaluate_rule(rule=rule, data=data)
         pruned_rule = rule[:-1]
         
         while len(pruned_rule) > 1:
@@ -121,8 +121,8 @@ class AntMiner:
 
             for i, term in enumerate(pruned_rule):
                 temp_rule = pruned_rule[:i] + pruned_rule[i+1:]
-                temp_rule = assign_class(data=uncovered_data, rule=temp_rule)
-                quality = evaluate_rule(rule=temp_rule, data=uncovered_data)
+                temp_rule = assign_class(data=data, rule=temp_rule)
+                quality = evaluate_rule(rule=temp_rule, data=data)
 
                 if quality > best_improvement:
                     best_term_to_remove = term
@@ -134,7 +134,7 @@ class AntMiner:
             else:
                 break
 
-        pruned_rule = assign_class(data=uncovered_data, rule=pruned_rule)
+        pruned_rule = assign_class(data=data, rule=pruned_rule)
 
         return pruned_rule
     
@@ -217,7 +217,7 @@ class AntMiner:
                 rule= self._prune_rule(rule, uncovered_data)
 
                 # evaluate the rule
-                quality = evaluate_rule(rule=rule, data=uncovered_data)
+                quality = evaluate_rule(rule=rule, data=data)
 
                 # update pheromones
                 pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)
@@ -253,13 +253,25 @@ class AntMiner:
 
 
     def predict(self, X):
-        data = X.copy()
-        data['class'] = None
+        """
+        Predict the classes of new instances using discovered rules by order
+        first rule that satisfy instance is applied
+        """
+        y_preds = []
+        for _, row in X.iterrows():
+            predicted_class = None
+            for rule in self.discovered_rules:
+                if all(row[term[0]] == term[1] for term in rule[:-1]):
+                    predicted_class = rule[-1][1]
+                    break
+            y_preds.append(predicted_class)
+        return pd.Series(y_preds, index=X.index)
 
-        for rule in self.discovered_rules:
-            subset = data.copy()
-            for term in rule[:-1]:
-                subset = subset[subset[term[0]] == term[1]]
-            data.loc[subset.index, 'class'] = rule[-1][1]
-
-        return data['class']
+    
+    def evaluate(self, X, y):
+        """
+        Evaluate the AntMiner model on the test data.
+        """
+        y_pred = self.predict(X)
+        accuracy = (y_pred == y).mean()
+        return accuracy

@@ -3,6 +3,8 @@ import dotenv
 import time
 import sys
 
+from sklearn.model_selection import train_test_split
+
 from argparse import ArgumentParser
 from dataclasses import dataclass
 
@@ -36,6 +38,9 @@ def main(args: Args) -> None:
     X = dataframe.drop('class', axis=1)
     y = dataframe['class']
 
+    # split the dataset into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+
     # Initialize the AntMiner algorithm
     ant_miner = AntMiner(
         max_ants=args.max_ants,
@@ -50,22 +55,27 @@ def main(args: Args) -> None:
     start_time = time.time()
 
     # Run the AntMiner algorithm
-    ant_miner.fit(X=X, y=y)
+    ant_miner.fit(X=X_train, y=y_train)
 
     # Stop the timer
     end_time = time.time()
 
     print(f'Training completed successfully within {end_time - start_time:.2f} seconds.')
 
+    # Evaluate the model
+    accuracy = ant_miner.evaluate(X_test, y_test)
+
+    print(f'Accuracy: {accuracy:.2f}')
+
 
 if __name__ == "__main__":
 
     parser = ArgumentParser(description="AntMiner Algorithm")
 
-    parser.add_argument("--max_ants", type=int, default=3000, help="Number of ants")
-    parser.add_argument("--max_uncovered", type=int, default=10, help="Maximum number of uncovered training examples to stop the algorithm")
-    parser.add_argument("--min_covers", type=int, default=10, help="Minimum number of examples to be covered by a rule")
-    parser.add_argument("--nb_converge", type=int, default=10, help="Number of rules used to test convergence of the ants")
+    parser.add_argument("--max-ants", type=int, default=3000, help="Number of ants")
+    parser.add_argument("--max-uncovered", type=int, default=10, help="Maximum number of uncovered training examples to stop the algorithm")
+    parser.add_argument("--min-covers", type=int, default=10, help="Minimum number of examples to be covered by a rule")
+    parser.add_argument("--nb-converge", type=int, default=10, help="Number of rules used to test convergence of the ants")
     parser.add_argument("--alpha", type=int, default=1, help="Alpha parameter for pheromone importance")
     parser.add_argument("--beta", type=int, default=1, help="Beta parameter for heuristic importance")
 
