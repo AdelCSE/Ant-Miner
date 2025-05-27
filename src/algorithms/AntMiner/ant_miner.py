@@ -2,6 +2,8 @@ import pandas as pd
 import math
 
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule
+from sklearn.metrics import f1_score, accuracy_score
+
 
 class AntMiner:
 
@@ -11,7 +13,8 @@ class AntMiner:
                  min_covers : int = 10, 
                  nb_converge : int = 10, 
                  alpha : int = 1,
-                 beta : int = 1
+                 beta : int = 1,
+                 pruning : int = 1
     ) -> None:
                 
         self.max_ants = max_ants
@@ -20,6 +23,7 @@ class AntMiner:
         self.nb_converge = nb_converge 
         self.alpha = alpha
         self.beta = beta
+        self.pruning = pruning
 
         self.discovered_rules = []
         self.qualities = []
@@ -214,7 +218,8 @@ class AntMiner:
                 rule = self._construct_rule(uncovered_data, all_terms, pheromones, heuristics)
 
                 # prune the rule
-                rule= self._prune_rule(rule, uncovered_data)
+                if self.pruning:
+                    rule= self._prune_rule(rule, uncovered_data)
 
                 # evaluate the rule
                 quality = evaluate_rule(rule=rule, data=data)
@@ -273,5 +278,7 @@ class AntMiner:
         Evaluate the AntMiner model on the test data.
         """
         y_pred = self.predict(X)
-        accuracy = (y_pred == y).mean()
-        return accuracy
+        accuracy = accuracy_score(y, y_pred)
+        f1 = f1_score(y, y_pred, average='weighted')
+
+        return accuracy, f1
