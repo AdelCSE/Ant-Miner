@@ -2,7 +2,7 @@ import pandas as pd
 import math
 
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule
-from sklearn.metrics import f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
 
 
 class AntMiner:
@@ -217,6 +217,9 @@ class AntMiner:
                 # construct the rule
                 rule = self._construct_rule(uncovered_data, all_terms, pheromones, heuristics)
 
+                if len(rule) < 2:
+                    continue
+
                 # prune the rule
                 if self.pruning:
                     rule= self._prune_rule(rule, uncovered_data)
@@ -271,6 +274,18 @@ class AntMiner:
                     break
             y_preds.append(predicted_class)
         return pd.Series(y_preds, index=X.index)
+    
+    def get_rules(self):
+        """
+        Get the discovered rules.
+        """
+        return self.discovered_rules
+    
+    def get_term_rule_ratios(self):
+        terms = 0
+        for rule in self.discovered_rules:
+            terms += len(rule) - 1
+        return terms / len(self.discovered_rules) if self.discovered_rules else 0
 
     
     def evaluate(self, X, y):

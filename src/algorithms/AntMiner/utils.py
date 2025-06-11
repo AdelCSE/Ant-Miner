@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 import math
+# import sensitivity and specificity metrics
+from sklearn.metrics import confusion_matrix
+
 
 def rule_covers_min_examples(data : pd.DataFrame, 
                              rule : list, 
@@ -71,7 +74,7 @@ def assign_class(data : pd.DataFrame,
         subset = subset[subset[term[0]] == term[1]]
     
     # TODO: remove bool when classes are string
-    assigned_class = bool(subset['class'].value_counts().idxmax())
+    assigned_class = subset['class'].value_counts().idxmax()
     rule += [('class', assigned_class)]
 
     return rule
