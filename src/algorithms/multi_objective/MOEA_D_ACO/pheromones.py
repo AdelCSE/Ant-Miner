@@ -1,4 +1,5 @@
 import numpy as np
+from .utils import find_gmax
 
 def update_pheromone(pheromones, colony, best_ants_indices, p, ant_groups, lambda_weights, eps):
     nb_ants = len(colony["ant"])
@@ -32,13 +33,3 @@ def update_pheromone(pheromones, colony, best_ants_indices, p, ant_groups, lambd
             pheromones[group][term] = max(tau_min, min(tau_max, pheromones[group][term]))
 
     return pheromones, tau_min, tau_max
-
-def find_gmax(colony, lambda_weights, start, end):
-    gmax = float("-inf")
-    for i in range(start - 1, end):
-        weights = lambda_weights[i]
-        fitness = colony["ant"][i]["fitness"]
-        scalarized = sum(w * f for w, f in zip(weights, fitness))
-        if scalarized > gmax:
-            gmax = scalarized
-    return gmax

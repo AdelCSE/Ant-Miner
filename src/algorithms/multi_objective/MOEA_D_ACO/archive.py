@@ -16,7 +16,6 @@ def update_EP(colony: dict, EP: list):
         ant_best_rule (list[int]): Indices of ants that produced new non-dominated solutions.
         EP (list): Updated Pareto archive.
     """
-    new_sol_EP = []
     ant_best_rule = []
 
     for i, ant in enumerate(colony["ant"]):
@@ -31,8 +30,9 @@ def update_EP(colony: dict, EP: list):
             EP = [ep_ant for ep_ant in EP if not dominates(ant["fitness"], ep_ant["fitness"])]
 
             # Add the new non-dominated solution
-            EP.append(ant)
-            new_sol_EP.append(ant)
-            ant_best_rule.append(i)
+
+            if not any(set(ep_ant["rule"]) == set(ant["rule"]) for ep_ant in EP):
+                EP.append(ant)
+                ant_best_rule.append(i)
 
     return ant_best_rule, EP

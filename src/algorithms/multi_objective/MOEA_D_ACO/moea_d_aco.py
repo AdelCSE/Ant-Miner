@@ -218,20 +218,18 @@ class MOEA_D_ACO():
                 lambda_weights=self.lambda_weights, eps=self.eps
             )
 
-            # Drop covered data
-            for ant in ant_best_rule:
-                uncovered_data = drop_covered(
-                    best_rule=self.colony['ant'][ant]['rule'], data=uncovered_data
-                )
-
-            """
             # Update neighborhood solutions
             for i in range(self.population):
                 self.colony, self.replacing_solution = find_best_neighborhood_rule(
                     self.colony, data, i, self.neighborhoods,
                     self.replacing_solution, self.neighbors, self.lambda_weights
                 )
-            """
+
+            # Drop covered data
+            for ant in ant_best_rule:
+                uncovered_data = drop_covered(
+                    best_rule=self.colony['ant'][ant]['rule'], data=uncovered_data
+                )
 
         print('Archive:')
         pprint.pprint(self.ARCHIVE)

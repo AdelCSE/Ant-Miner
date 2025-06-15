@@ -2,6 +2,17 @@ import pandas as pd
 import numpy as np
 import math
 
+def find_gmax(colony, lambda_weights, start, end):
+    gmax = float("-inf")
+    for i in range(start - 1, end):
+        weights = lambda_weights[i]
+        fitness = colony["ant"][i]["fitness"]
+        scalarized = sum(w * f for w, f in zip(weights, fitness))
+        if scalarized > gmax:
+            gmax = scalarized
+    return gmax
+
+
 def get_class_probs(data : pd.DataFrame, attr_name : str, attr_value : str, class_label : str) -> list:
     """
     Calculate the class probabilities for a given attribute value.

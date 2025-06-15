@@ -1,4 +1,4 @@
-from .pheromones import find_gmax
+from .utils import find_gmax
 from .fitness import fitness_function
 
 def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing_solution, T, lambda_weights):
@@ -9,18 +9,21 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
     changed_rule = False
 
     for i in neighborhood[ant_index][:T]:
+
+        # Skip if the ant is itself
         if i == ant_index:
             continue
 
         new_rule = colony['ant'][i]['rule']
         new_g = find_gmax(colony, lambda_weights, i, i)
 
-        # Check if new_rule was already used to replace this ant
+        # Check if new_rule is already in the replacing_solution
         in_replacing_solution = False
         for past_rule in replacing_solution[ant_index]:
-            if new_rule == past_rule:
+            if set(new_rule) == set(past_rule):
                 in_replacing_solution = True
                 break
+
         if in_replacing_solution:
             continue
 

@@ -43,8 +43,6 @@ def create_colony(data : pd.DataFrame, attributes : list, terms : list, populati
                 break
 
         if rejection_count > 100:
-            print(f"Ant {i} rejected after {rejection_count} attempts to find a valid initial term.")
-            colony['ant'].append({'rule': []})
             continue
 
         rule.append(initial_term)
