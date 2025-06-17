@@ -1,8 +1,8 @@
 import pandas as pd
 import math
 
-from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule
-from sklearn.metrics import f1_score, accuracy_score, roc_auc_score
+from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule, plot_patero_front, update_EP
+from sklearn.metrics import f1_score
 
 
 class AntMiner:
@@ -26,6 +26,8 @@ class AntMiner:
         self.pruning = pruning
 
         self.discovered_rules = []
+        self.archive = []
+        self.fitness_archive = []
         self.qualities = []
 
 
@@ -157,18 +159,20 @@ class AntMiner:
 
         return pheromones
 
-    def _get_best_rule(self, rules : list, qualities : list) -> tuple:
+    def _get_best_rule(self, rules : list, qualities : list, fitnesses: list) -> tuple:
         """
         Choose the best rule from a set of rules based on their quality.
         """
         best_rule = rules[0]
         best_quality = qualities[0]
+        best_fitness = fitnesses[0]
         for i in range(1, len(rules)):
             if qualities[i] > best_quality:
                 best_rule = rules[i]
                 best_quality = qualities[i]
+                best_fitness = fitnesses[i]
 
-        return best_rule, best_quality
+        return best_rule, best_quality, best_fitness
     
     
     def _drop_covered(self, best_rule : list, uncovered_data : pd.DataFrame) -> pd.DataFrame: 
@@ -209,6 +213,7 @@ class AntMiner:
 
             all_rules = []
             qualities = []
+            fitnesses = []
 
             prev_rule = ""
             
@@ -225,7 +230,7 @@ class AntMiner:
                     rule= self._prune_rule(rule, uncovered_data)
 
                 # evaluate the rule
-                quality = evaluate_rule(rule=rule, data=data)
+                quality, fitness = evaluate_rule(rule=rule, data=data)
 
                 # update pheromones
                 pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)
@@ -233,6 +238,7 @@ class AntMiner:
                 # store the rules
                 all_rules.append(rule)
                 qualities.append(quality)
+                fitnesses.append(fitness)
                 
                 # rule to string
                 rule_str = " AND ".join(sorted([f"{term[0]} = {term[1]}" for term in rule[:-1]])) + f" THEN {rule[-1][1]}"
@@ -247,31 +253,53 @@ class AntMiner:
                 ant += 1
 
             # choose the best rule
-            best_rule, best_quality = self._get_best_rule(all_rules, qualities)
+            best_rule, best_quality, best_fitness = self._get_best_rule(all_rules, qualities, fitnesses)
 
             # archive the best rule
             self.discovered_rules.append(best_rule)
             self.qualities.append(best_quality)
+            self.fitness_archive.append(best_fitness)
+
+            # get non-dominated solutions
+            self.archive = update_EP(
+                rules=self.discovered_rules, 
+                fitnesses=self.fitness_archive, 
+                EP=self.archive
+            )
 
             rule_str ="IF " + " AND ".join([f"({term[0]} = {term[1]})" for term in best_rule[:-1]]) + f" ==> (Class = {best_rule[-1][1]})"
-            print(f'Rule: {rule_str}, Quality: {best_quality}')
+            #print(f'Rule: {rule_str}, Quality: {best_quality}')
 
             # drop covered instances
             uncovered_data = self._drop_covered(best_rule, uncovered_data)
 
+        #print(self.archive)
+
+        # Plot Pareto front if available
+        #if len(self.fitness_archive) > 0:
+            #plot_patero_front(archive=self.fitness_archive)
+
+
 
     def predict(self, X):
         """
-        Predict the classes of new instances using discovered rules by order
-        first rule that satisfy instance is applied
+        Predict the class for new instances based on the best rule in the archive.
         """
+        if len(self.archive) == 0:
+            raise ValueError("No rules found in the archive. Run the algorithm first.")
+        
+        class_labels = [rule[-1][1] for rule in self.discovered_rules]
+        majority_class = max(set(class_labels), key=class_labels.count)
+
         y_preds = []
         for _, row in X.iterrows():
             predicted_class = None
-            for rule in self.discovered_rules:
-                if all(row[term[0]] == term[1] for term in rule[:-1]):
-                    predicted_class = rule[-1][1]
+            for ant in self.archive:
+                if all(row[term[0]] == term[1] for term in ant['rule'][:-1]):
+                    predicted_class = ant['rule'][-1][1]
                     break
+            if predicted_class is None:
+                predicted_class = majority_class
             y_preds.append(predicted_class)
         return pd.Series(y_preds, index=X.index)
     
@@ -293,7 +321,6 @@ class AntMiner:
         Evaluate the AntMiner model on the test data.
         """
         y_pred = self.predict(X)
-        accuracy = accuracy_score(y, y_pred)
+        accuracy = (y_pred == y).mean()
         f1 = f1_score(y, y_pred, average='weighted')
-
         return accuracy, f1

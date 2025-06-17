@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 def fitness_function(data: pd.DataFrame, rule: list) -> list:
     """
     Computes the fitness of a rule based on Sensitivity and Specificity.
@@ -20,7 +19,7 @@ def fitness_function(data: pd.DataFrame, rule: list) -> list:
     if len(rule) == 0:
         return [fitness_sensitivity, fitness_specificity]
     
-    
+
     target_class = rule[-1][1]
     conditions = rule[:-1]
 
@@ -39,7 +38,7 @@ def fitness_function(data: pd.DataFrame, rule: list) -> list:
 
     # True Negatives (TN): Class is not target and rule does not match
     total_negatives = len(data[data['class'] != target_class])
-    tn = total_negatives - fp
+    tn = len(data) - tp - fp - fn
 
     # Sensitivity = TP / (TP + FN)
     if (tp + fn) > 0:

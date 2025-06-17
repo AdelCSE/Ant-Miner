@@ -1,6 +1,8 @@
 .env
 datasets
 datasets/**
+results
+results/**
 *.csv
 __pycache__
 aco_env

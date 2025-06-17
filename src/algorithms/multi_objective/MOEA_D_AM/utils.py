@@ -6,7 +6,7 @@ def find_gmax(colony, lambda_weights, start, end):
     gmax = float("-inf")
     for i in range(start - 1, end):
         weights = lambda_weights[i]
-        fitness = colony["ant"][i]["fitness"]
+        fitness = colony['ants'][i]['fitness']
         scalarized = sum(w * f for w, f in zip(weights, fitness))
         if scalarized > gmax:
             gmax = scalarized
@@ -91,3 +91,19 @@ def drop_covered(best_rule : list, data : pd.DataFrame) -> pd.DataFrame:
     data = data.drop(subset.index).reset_index(drop=True)
 
     return data
+
+
+def remove_dominated_rules(archive):
+    """
+    Remove dominated rules from the archive.
+    """
+    non_dominated = []
+    for rule in archive:
+        if not any(
+            all(r1 >= r2 for r1, r2 in zip(rule['fitness'], other_rule['fitness'])) and
+            any(r1 > r2 for r1, r2 in zip(rule['fitness'], other_rule['fitness']))
+            for other_rule in archive if other_rule != rule
+        ):
+            non_dominated.append(rule)
+
+    return non_dominated

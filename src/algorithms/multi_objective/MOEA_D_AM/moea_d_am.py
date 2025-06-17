@@ -4,25 +4,59 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, roc_auc_score
 
 # Import algorithm components
-from .rules_initialization import initialize_rules
-from .indicator import indicator_function
 from .colony import create_colony
+from .pruning import prune_rule
 from .fitness import fitness_function
 from .archive import update_EP
 from .pheromones import update_pheromone
 from .neighborhood import find_best_neighborhood_rule
-from .patero_front import plot_patero_front
-from .utils import get_class_probs, compute_entropy, assign_class, drop_covered
+from .utils import get_class_probs, compute_entropy, drop_covered, remove_dominated_rules
 
 
-class MOEA_D_ACO():
-    def __init__(self, population, neighbors, groups, max_iter, min_examples, max_uncovered, p, gamma, alpha, beta, delta, pruning):
+class MOEA_D_AM():
+    """
+    Multi-Objective Evolutionary Algorithm based on Decomposition with Ant Colony Optimization (MOEA/D-ACO) 
+    for rule discovery in classification tasks..
+
+    Args:
+        population (int): Number of ants in the colony.
+        neighbors (int): Number of neighbors for each ant.
+        groups (int): Number of groups for decomposition.
+        max_iter (int): Maximum number of iterations.
+        min_examples (int): Minimum number of examples required to cover by a rule.
+        max_uncovered (int): Maximum number of uncovered examples allowed before stopping.
+        p (float): Pheromone evaporation rate.
+        gamma (float): Probability threshold for greedy selection.
+        alpha (float): Weight for pheromone influence.
+        beta (float): Weight for heuristic influence.
+        delta (float): Pheromone update factor.
+        pruning (int): Pruning strategy (0 for no pruning).
+    
+    Output:
+        An instance of the MOEA_D_ACO class that can be used to run the algorithm
+    """
+    def __init__(self, 
+                 population: int, 
+                 neighbors: int, 
+                 groups: int, 
+                 max_iter: int, 
+                 min_examples: int, 
+                 max_uncovered: int, 
+                 p: float, 
+                 gamma: float, 
+                 alpha: float, 
+                 beta: float, 
+                 delta: float, 
+                 pruning: int = 0
+    ) -> None:
+        
         self.population = population
         self.neighbors = neighbors
         self.groups = groups
+
         self.max_iter = max_iter
         self.min_examples = min_examples
         self.max_uncovered = max_uncovered
@@ -36,7 +70,7 @@ class MOEA_D_ACO():
 
         self.lambda_weights = []
         self.lambda_groups = [[] for _ in range(groups)]
-        self.group_ant = np.zeros(population, dtype=int)
+        self.ant_groups = np.zeros(population, dtype=int)
 
         self.heuristics = None
         self.pheromones = None
@@ -45,9 +79,10 @@ class MOEA_D_ACO():
         self.delta = delta * self.tau_max
 
         self.colony = {}
+        self.ARCHIVE = []
         self.neighborhoods = np.zeros((population, neighbors), dtype=int)
         self.replacing_solution = [[] for _ in range(population)]
-        self.ARCHIVE = []
+
 
 
     def init_weights(self):
@@ -62,8 +97,9 @@ class MOEA_D_ACO():
             dists = [cdist([weight], [csi]) for csi in csi_weights]
             group = int(np.argmin(dists))
             self.lambda_groups[group].append(weight)
-            self.group_ant[i] = group
+            self.ant_groups[i] = group
             
+
 
     def init_heuristics(self, data : pd.DataFrame, population : int, class_name : str):
         """
@@ -91,6 +127,7 @@ class MOEA_D_ACO():
             self.heuristics[i] = subproblem_heuristic
 
 
+
     def init_pheromones(self, terms : list):
         """
         Initialize pheromone levels for each term in group k.
@@ -99,6 +136,7 @@ class MOEA_D_ACO():
         for k in range(self.groups):
             pheromone = {term: 1.0 / len(terms) for term in terms}
             self.pheromones[k] = pheromone
+
 
 
     def init_neighborhood(self, population: int, neighbors: int):
@@ -110,43 +148,6 @@ class MOEA_D_ACO():
             lower = max(0, i - neighbors // 2)
             upper = min(population, lower + neighbors)
             self.neighborhoods[i] = np.arange(lower, upper)
-
-
-    def _prune_rule(self, rule : list, data : pd.DataFrame) -> list:
-        """
-        Prune the rule by removing terms until no further improvement is possible.
-        """
-        
-        best_quality = fitness_function(data=data, rule=rule)
-        pruned_rule = rule[:-1]
-        
-        while len(pruned_rule) > 1:
-
-            best_term_to_remove = None
-            best_improvement = best_quality
-
-            for i, term in enumerate(pruned_rule):
-                temp_rule = pruned_rule[:i] + pruned_rule[i+1:]
-                temp_rule = assign_class(data=data, rule=temp_rule)
-                quality = fitness_function(data=data, rule=temp_rule)
-
-                # dominance check
-                if all(f1 >= f2 for f1, f2 in zip(quality, best_quality)) and any(f1 > f2 for f1, f2 in zip(quality, best_quality)):
-                    best_improvement = quality
-                    best_term_to_remove = term
-
-            if best_term_to_remove:
-                pruned_rule.remove(best_term_to_remove)
-                best_quality = best_improvement
-            else:
-                break
-
-        pruned_rule = assign_class(data=data, rule=pruned_rule)
-
-        print(f'original rule: {rule}')
-        print(f'pruned rule: {pruned_rule}')
-
-        return pruned_rule
     
 
 
@@ -155,26 +156,19 @@ class MOEA_D_ACO():
         data = X.copy()
         data['class'] = y
 
-        uncovered_data = data.copy()
-
         terms = [(col, val) for col in X.columns for val in X[col].unique()]
+        uncovered_data = data.copy()
 
         # Initialize colony parameters
         self.init_weights()
         self.init_heuristics(data, self.population, 'class')
         self.init_pheromones(terms)
 
-        # Initialize colony
-        self.colony = initialize_rules(
-            colony={}, data=data, attributes=X.columns.tolist(), terms=terms, 
-            population=self.population, min_examples=self.min_examples
-        )
-
         for t in tqdm(range(self.max_iter), desc="Running MOEA/D-ACO"):
 
             # Check if there is enough uncovered data
             if len(uncovered_data) <= self.max_uncovered:
-                print(f"Early stopping at iteration {t} due to insufficient data.")
+                #print(f"Early stopping at iteration {t} due to insufficient data.")
                 break
 
             # Desirability matrix
@@ -182,10 +176,8 @@ class MOEA_D_ACO():
             for i in range(self.population):
                 phi_matrix[i] = {}
                 for term in terms:
-                    indicator = indicator_function(rule=self.colony['ant'][i]['rule'], next_term=term)
-                    g = self.group_ant[i]
-                    tau_term = self.pheromones[g][term] + self.delta * indicator
-                    phi_matrix[i][term] = (tau_term ** self.alpha) * (self.heuristics[i][term] ** self.beta)
+                    g = self.ant_groups[i]
+                    phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[i][term] ** self.beta)
 
             # Construct new colony
             self.colony = create_colony(
@@ -196,14 +188,14 @@ class MOEA_D_ACO():
             # Prune rules
             if self.pruning:
                 for i in range(self.population):
-                    self.colony['ant'][i]['rule'] = self._prune_rule(
-                        rule=self.colony['ant'][i]['rule'], data=data
+                    self.colony['ants'][i]['rule'] = prune_rule(
+                        data=data, rule=self.colony['ants'][i]['rule']
                     )
 
             # Fitness evaluation
             for i in range(self.population):
-                self.colony['ant'][i]['fitness'] = fitness_function(
-                    data=data, rule=self.colony['ant'][i]['rule']
+                self.colony['ants'][i]['fitness'] = fitness_function(
+                    data=data, rule=self.colony['ants'][i]['rule']
                 )
 
             # Update EP
@@ -214,7 +206,7 @@ class MOEA_D_ACO():
             # Update pheromones
             self.pheromones, self.tau_min, self.tau_max = update_pheromone(
                 pheromones=self.pheromones, colony=self.colony,
-                best_ants_indices=ant_best_rule, p=self.p, ant_groups=self.group_ant, 
+                best_ants_indices=ant_best_rule, p=self.p, ant_groups=self.ant_groups, 
                 lambda_weights=self.lambda_weights, eps=self.eps
             )
 
@@ -225,17 +217,14 @@ class MOEA_D_ACO():
                     self.replacing_solution, self.neighbors, self.lambda_weights
                 )
 
-            # Drop covered data
-            for ant in ant_best_rule:
+            for i in ant_best_rule:
+                # Drop covered examples from uncovered_data
                 uncovered_data = drop_covered(
-                    best_rule=self.colony['ant'][ant]['rule'], data=uncovered_data
+                    best_rule=self.colony['ants'][i]['rule'],
+                    data=uncovered_data,
                 )
-
-        print('Archive:')
-        pprint.pprint(self.ARCHIVE)
-
-        # Plot the Pareto front
-        plot_patero_front(archive=self.ARCHIVE)
+            
+        self.ARCHIVE = remove_dominated_rules(self.ARCHIVE)
 
     
     def predict(self, X):
@@ -244,6 +233,9 @@ class MOEA_D_ACO():
         """
         if len(self.ARCHIVE) == 0:
             raise ValueError("No rules found in the archive. Run the algorithm first.")
+        
+        class_labels = [ant['rule'][-1][1] for ant in self.ARCHIVE]
+        majority_class = max(set(class_labels), key=class_labels.count)
 
         y_preds = []
         for _, row in X.iterrows():
@@ -252,13 +244,39 @@ class MOEA_D_ACO():
                 if all(row[term[0]] == term[1] for term in ant['rule'][:-1]):
                     predicted_class = ant['rule'][-1][1]
                     break
+            if predicted_class == None:
+                predicted_class = majority_class
+
             y_preds.append(predicted_class)
         return pd.Series(y_preds, index=X.index)
-    
+
+
     def evaluate(self, X, y):
         """
         Evaluate the performance of the discovered rules on a test set.
         """
-        predictions = self.predict(X)
-        accuracy = (predictions == y).mean()
-        return accuracy
+        y_pred = self.predict(X)
+        accuracy = accuracy_score(y, y_pred)
+        f1_score_v = f1_score(y, y_pred, average='weighted')
+        recall = recall_score(y, y_pred, average='weighted')
+        precision = precision_score(y, y_pred, average='weighted')
+        roc_auc = roc_auc_score(pd.get_dummies(y), pd.get_dummies(y_pred), average='weighted')
+
+        return accuracy, f1_score_v, recall, precision, roc_auc
+    
+
+    def get_archive(self):
+        """
+        Get the archive of discovered rules.
+        """
+        return self.ARCHIVE
+    
+
+    def get_ant_colony(self):
+        """
+        Get the ant colony.
+        """
+        return self.colony
+    
+
+

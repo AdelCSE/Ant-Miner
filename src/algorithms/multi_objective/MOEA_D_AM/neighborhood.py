@@ -5,7 +5,7 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
 
     # Compute current ant's fitness scalar value
     ant_g = find_gmax(colony, lambda_weights, ant_index, ant_index)
-    best_rule = colony['ant'][ant_index]['rule']
+    best_rule = colony['ants'][ant_index]['rule']
     changed_rule = False
 
     for i in neighborhood[ant_index][:T]:
@@ -14,7 +14,7 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
         if i == ant_index:
             continue
 
-        new_rule = colony['ant'][i]['rule']
+        new_rule = colony['ants'][i]['rule']
         new_g = find_gmax(colony, lambda_weights, i, i)
 
         # Check if new_rule is already in the replacing_solution
@@ -29,8 +29,8 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
 
         # If neighbor solution better, replace current
         if new_g > ant_g:
-            colony['ant'][ant_index]['rule'] = new_rule
-            colony['ant'][ant_index]['fitness'] = fitness_function(data=data, rule=new_rule)
+            colony['ants'][ant_index]['rule'] = new_rule
+            colony['ants'][ant_index]['fitness'] = fitness_function(data=data, rule=new_rule)
             ant_g = new_g
             best_rule = new_rule
             changed_rule = True

@@ -1,0 +1,1 @@
+from .moea_d_am import MOEA_D_AM

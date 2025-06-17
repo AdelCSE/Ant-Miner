@@ -16,7 +16,7 @@ def initialize_rules(colony: dict, data: pd.DataFrame, attributes: list, terms: 
         dict: Updated colony with initialized ants and their rules.
     """
 
-    colony = {'ant': []}
+    colony = {'ants': []}
 
     for i in range(population):
 
@@ -38,7 +38,7 @@ def initialize_rules(colony: dict, data: pd.DataFrame, attributes: list, terms: 
         # Assign class to the rule
         rule = assign_class(data=data, rule=rule)
 
-        colony['ant'].append({'rule': rule})
+        colony['ants'].append({'rule': rule})
 
 
     return colony

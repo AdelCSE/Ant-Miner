@@ -9,7 +9,7 @@ def update_EP(colony: dict, EP: list):
     Updates the external Pareto archive (EP) with non-dominated solutions from the colony.
 
     Args:
-        colony (dict): Should contain a list of ants under `colony["ant"]`, each with a `fitness` list.
+        colony (dict): Should contain a list of ants under `colony['ants']`, each with a `fitness` list.
         EP (list): Existing archive of non-dominated solutions (list of ant dicts).
 
     Returns:
@@ -18,7 +18,7 @@ def update_EP(colony: dict, EP: list):
     """
     ant_best_rule = []
 
-    for i, ant in enumerate(colony["ant"]):
+    for i, ant in enumerate(colony['ants']):
         dominated = False
         for ep_ant in EP:
             if dominates(ep_ant["fitness"], ant["fitness"]):

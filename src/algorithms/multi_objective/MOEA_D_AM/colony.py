@@ -19,12 +19,12 @@ def create_colony(data : pd.DataFrame, attributes : list, terms : list, populati
         dict: colony dictionary with key 'ant' and a list of ants, each with a 'rule'.
     """
     
-    colony = {'ant': []}
+    colony = {'ants': []}
 
     for i in range(population):
 
-        used_attrs = []
         rule = []
+        used_attrs = []
 
         rejection_count = 0
 
@@ -43,6 +43,7 @@ def create_colony(data : pd.DataFrame, attributes : list, terms : list, populati
                 break
 
         if rejection_count > 100:
+            colony['ants'].append({'rule': []})
             continue
 
         rule.append(initial_term)
@@ -56,29 +57,29 @@ def create_colony(data : pd.DataFrame, attributes : list, terms : list, populati
                 break
 
             available_terms = [term for term in terms if term[0] not in used_attrs]
-
+            """
             if np.random.rand() < gamma:
                 # Greedy selection
                 phi_values = np.array([phi[i][term] for term in available_terms])
                 max_index = np.argmax(phi_values)
                 next_term = available_terms[max_index]
+            
             else:
-                # Probabilistic selection (roulette wheel)
-                probs = np.array([phi[i][term] for term in available_terms])
-                prob_sum = np.sum(probs)
+            """
 
-                if prob_sum == 0:
-                    indices = np.arange(len(available_terms))
-                    next_term = available_terms[np.random.choice(indices)]
-                else:
-                    probs /= prob_sum
-                    next_index = roulette_wheel(probs)
-                    next_term = available_terms[next_index]
+            # Probabilistic selection (roulette wheel)
+            probs = np.array([phi[i][term] for term in available_terms])
+            prob_sum = np.sum(probs)
+            indices = np.arange(len(available_terms))
+
+            probs /= prob_sum
+            next_index = np.random.choice(indices, p=probs)
+            next_term = available_terms[next_index]
 
             used_attrs.append(next_term[0])
             rule.append(next_term)
 
         rule = assign_class(data=data, rule=rule)
-        colony['ant'].append({'rule': rule})
+        colony['ants'].append({'rule': rule})
 
     return colony
