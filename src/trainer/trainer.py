@@ -68,20 +68,18 @@ def main(args: Args) -> None:
         ant_miner.fit(X_train, y_train)
         end_time = time.time()
 
-        accuracy, f1score = ant_miner.evaluate(X_test, y_test)
+        accuracy= ant_miner.evaluate(X_test, y_test)
         term_rule_ratio = ant_miner.get_term_rule_ratios()
 
         Total_time += end_time - start_time
 
-        print(f'Fold {k+1} completed in {end_time - start_time:.2f} seconds [Accuracy: {accuracy:.2f}, F1-Score: {f1score:.2f}, Term/Rule: {term_rule_ratio:.2f}]')
+        print(f'Fold {k+1} completed in {end_time - start_time:.2f} seconds [Accuracy: {accuracy:.2f}, ')
         accuracy_list.append(accuracy)
-        f1score_list.append(f1score)
         term_rule_ratio_list.append(term_rule_ratio)
     
 
     print(f'\nTotal time for {args.num_folds} folds: {Total_time:.2f} seconds')
     print(f'Average accuracy: {sum(accuracy_list) / len(accuracy_list):.2f} ± {pd.Series(accuracy_list).std():.2f}')
-    print(f'Average F1-Score: {sum(f1score_list) / len(f1score_list):.2f} ± {pd.Series(f1score_list).std():.2f}')
     print(f'Average Term/Rule Ratio: {sum(term_rule_ratio_list) / len(term_rule_ratio_list):.2f} ± {pd.Series(term_rule_ratio_list).std():.2f}')
 
 
@@ -96,7 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--alpha", type=int, default=1, help="Alpha parameter for pheromone importance")
     parser.add_argument("--beta", type=int, default=1, help="Beta parameter for heuristic importance")
     parser.add_argument("--pruning", type=int, default=1, help="Enable rule pruning")
-    parser.add_argument("--num-folds", type=int, default=10, help="Number of folds for cross-validation")
+    parser.add_argument("--num-folds", type=int, default=2, help="Number of folds for cross-validation")
 
     args = parser.parse_args()
     main(args)

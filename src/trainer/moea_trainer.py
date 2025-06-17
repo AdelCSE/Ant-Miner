@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sklearn.model_selection import train_test_split
 
 sys.path.append("../..")
-from src.algorithms.multi_objective.MOEA_D_ACO import MOEA_D_ACO
+from src.algorithms.multi_objective.MOEA_D_AM import MOEA_D_AM
 
 
 env = dotenv.find_dotenv()
@@ -49,7 +49,7 @@ def main(args: Args) -> None:
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
     # Initialize the MOEA/D-AM algorithm
-    moea_d_aco = MOEA_D_ACO(
+    moea_d_aco = MOEA_D_AM(
         population=args.population,
         neighbors=args.neighbors,
         groups=args.groups,
@@ -74,8 +74,8 @@ def main(args: Args) -> None:
 
     print(f"Total time taken: {end_time - start_time:.2f} seconds")
 
-    acc = moea_d_aco.evaluate(X_test, y_test)
-    print(f"Accuracy on test set: {acc:.2f}")
+    acc, f1_score, recall, precision, auc = moea_d_aco.evaluate(X_test, y_test)
+    print(f"Accuracy: {acc:.4f}, F1 Score: {f1_score:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, AUC: {auc:.4f}")
 
 if __name__ == "__main__":
 
