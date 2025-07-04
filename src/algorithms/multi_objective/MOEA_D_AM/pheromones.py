@@ -1,4 +1,3 @@
-import numpy as np
 from .utils import find_gmax
 
 def update_pheromone(pheromones, colony, best_ants_indices, p, ant_groups, lambda_weights, eps):
@@ -20,7 +19,7 @@ def update_pheromone(pheromones, colony, best_ants_indices, p, ant_groups, lambd
         scalarized = sum(weights[l] * fitness[l] for l in range(len(fitness)))
         for current_term in rule:
             if current_term[0] != "class":
-                pheromones[group][current_term] *= scalarized
+                pheromones[group][current_term] *= 1 / scalarized
 
     # Compute tau_max and tau_min using gmax
     B = len(best_ants_indices)

@@ -10,9 +10,11 @@ from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_sc
 from .colony import create_colony
 from .pruning import prune_rule
 from .fitness import fitness_function
-from .archive import update_EP
+from .archive import update_archive
 from .pheromones import update_pheromone
 from .neighborhood import find_best_neighborhood_rule
+from .prediction import predict_function
+from .patero_front import plot_patero_front
 from .utils import get_class_probs, compute_entropy, drop_covered, remove_dominated_rules
 
 
@@ -38,6 +40,7 @@ class MOEA_D_AM():
     Output:
         An instance of the MOEA_D_ACO class that can be used to run the algorithm
     """
+
     def __init__(self, 
                  population: int, 
                  neighbors: int, 
@@ -50,7 +53,10 @@ class MOEA_D_AM():
                  alpha: float, 
                  beta: float, 
                  delta: float, 
-                 pruning: int = 0
+                 pruning: int,
+                 archive_type: str,
+                 rulesets: str,
+                 random_state: int = None
     ) -> None:
         
         self.population = population
@@ -83,6 +89,12 @@ class MOEA_D_AM():
         self.neighborhoods = np.zeros((population, neighbors), dtype=int)
         self.replacing_solution = [[] for _ in range(population)]
 
+        self.random_state = random_state
+        self.majority = None
+
+        self.archive_type = archive_type
+        self.rulesets = rulesets
+
 
 
     def init_weights(self):
@@ -101,31 +113,28 @@ class MOEA_D_AM():
             
 
 
-    def init_heuristics(self, data : pd.DataFrame, population : int, class_name : str):
+    def init_heuristics(self, data : pd.DataFrame):
         """
         Initialize heuristic information for each term in subproblem i.
         """
-        num_classes = data[class_name].nunique()
+        nb_classes = data['class'].nunique()
 
         self.heuristics = {}
-        for i in range(population):
-            subproblem_heuristic = {}
-            numerator_terms = {}
-            for attribute in data.columns[:-1]:
-                for value in data[attribute].unique():
-                    probs = get_class_probs(data, attribute, value, class_name)
+        numerator_terms = {}
 
-                    if len(probs) > 0:
-                        entropy = compute_entropy(probs)
-                        term = (attribute, value)
-                        numerator_terms[term] = math.log2(num_classes) - entropy
+        for attribute in data.columns[:-1]:
+            for value in data[attribute].unique():
+                probs = get_class_probs(data, attribute, value, 'class')
 
-            total = sum(numerator_terms.values())
-            for term, value in numerator_terms.items():
-                subproblem_heuristic[term] = value / total if total != 0 else 0
-            
-            self.heuristics[i] = subproblem_heuristic
-
+                if len(probs) > 0:
+                    entropy = compute_entropy(probs)
+                    term = (attribute, value)
+                    numerator_terms[term] = math.log2(nb_classes) - entropy
+                    
+        total = sum(numerator_terms.values())
+        for term, value in numerator_terms.items():
+            self.heuristics[term] = value / total if total != 0 else 0
+        
 
 
     def init_pheromones(self, terms : list):
@@ -151,20 +160,21 @@ class MOEA_D_AM():
     
 
 
-    def run(self, X, y):
+    def run(self, X, y, labels):
 
         data = X.copy()
         data['class'] = y
+        positive_class = labels[0]
 
         terms = [(col, val) for col in X.columns for val in X[col].unique()]
         uncovered_data = data.copy()
 
         # Initialize colony parameters
         self.init_weights()
-        self.init_heuristics(data, self.population, 'class')
+        self.init_heuristics(data)
         self.init_pheromones(terms)
 
-        for t in tqdm(range(self.max_iter), desc="Running MOEA/D-ACO"):
+        for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
 
             # Check if there is enough uncovered data
             if len(uncovered_data) <= self.max_uncovered:
@@ -177,12 +187,12 @@ class MOEA_D_AM():
                 phi_matrix[i] = {}
                 for term in terms:
                     g = self.ant_groups[i]
-                    phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[i][term] ** self.beta)
+                    phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[term] ** self.beta)
 
             # Construct new colony
             self.colony = create_colony(
                 data=uncovered_data, attributes=X.columns.tolist(), terms=terms, population=self.population, 
-                gamma=self.gamma, phi=phi_matrix, min_examples=self.min_examples
+                gamma=self.gamma, phi=phi_matrix, min_examples=self.min_examples, random_state=self.random_state
             )
 
             # Prune rules
@@ -194,37 +204,66 @@ class MOEA_D_AM():
 
             # Fitness evaluation
             for i in range(self.population):
-                self.colony['ants'][i]['fitness'] = fitness_function(
+                self.colony['ants'][i]['fitness'], self.colony['ants'][i]['f1_score'] = fitness_function(
                     data=data, rule=self.colony['ants'][i]['rule']
                 )
 
-            # Update EP
-            ant_best_rule, self.ARCHIVE = update_EP(
-                colony=self.colony, EP=self.ARCHIVE
+            # Update archive
+            best_ants_indices, self.ARCHIVE = update_archive(
+                colony=self.colony, archive=self.ARCHIVE, positive_class=positive_class, rulesets=self.rulesets,
             )
 
             # Update pheromones
             self.pheromones, self.tau_min, self.tau_max = update_pheromone(
                 pheromones=self.pheromones, colony=self.colony,
-                best_ants_indices=ant_best_rule, p=self.p, ant_groups=self.ant_groups, 
+                best_ants_indices=best_ants_indices, p=self.p, ant_groups=self.ant_groups, 
                 lambda_weights=self.lambda_weights, eps=self.eps
             )
 
+            
             # Update neighborhood solutions
             for i in range(self.population):
                 self.colony, self.replacing_solution = find_best_neighborhood_rule(
-                    self.colony, data, i, self.neighborhoods,
+                    self.colony, data, i, self.neighborhoods, positive_class,
                     self.replacing_solution, self.neighbors, self.lambda_weights
                 )
 
-            for i in ant_best_rule:
+            
+            for i in best_ants_indices:
                 # Drop covered examples from uncovered_data
                 uncovered_data = drop_covered(
                     best_rule=self.colony['ants'][i]['rule'],
                     data=uncovered_data,
                 )
             
-        self.ARCHIVE = remove_dominated_rules(self.ARCHIVE)
+        #self.ARCHIVE = remove_dominated_rules(self.ARCHIVE)
+        self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else None
+
+        if self.rulesets == 'subproblem':
+            self.ARCHIVE = [ant for ant in self.ARCHIVE if ant['f1_score'] > 0]
+
+
+        #pprint.pprint(self.ARCHIVE)
+        
+    
+    def get_term_rule_ratios(self):
+
+        if self.archive_type == 'rules':
+            terms = 0
+            for ant in self.ARCHIVE:
+                terms += len(ant['rule']) - 1
+
+            return terms / len(self.ARCHIVE) if self.ARCHIVE else 0
+        
+        elif self.archive_type == 'rulesets':
+            terms = 0
+            rules = 0
+            for ruleset in self.ARCHIVE:
+                for ant in ruleset['ruleset']:
+                    terms += len(ant['rule']) - 1
+                    rules += 1
+
+            return terms / rules if rules > 0 else 0
 
     
     def predict(self, X):
@@ -234,8 +273,10 @@ class MOEA_D_AM():
         if len(self.ARCHIVE) == 0:
             raise ValueError("No rules found in the archive. Run the algorithm first.")
         
-        class_labels = [ant['rule'][-1][1] for ant in self.ARCHIVE]
-        majority_class = max(set(class_labels), key=class_labels.count)
+        
+        if self.majority is None:
+            classes = [ant['rule'][-1][1] for ant in self.ARCHIVE]
+            self.majority = pd.Series(classes).mode()[0] if len(classes) > 0 else None
 
         y_preds = []
         for _, row in X.iterrows():
@@ -245,24 +286,52 @@ class MOEA_D_AM():
                     predicted_class = ant['rule'][-1][1]
                     break
             if predicted_class == None:
-                predicted_class = majority_class
+                predicted_class = self.majority
 
             y_preds.append(predicted_class)
         return pd.Series(y_preds, index=X.index)
+    
 
 
-    def evaluate(self, X, y):
+    def partial_predict(self, X, labels):
+        """
+        Predict the class for new instances based on the best rule in the archive.
+        This method is similar to predict but returns a DataFrame with probabilities.
+        """
+        if len(self.ARCHIVE) == 0:
+            raise ValueError("No rules found in the archive. Run the algorithm first.")
+        
+
+        y_preds = []
+        for _, row in X.iterrows():
+            predicted_class = None
+            for ant in self.ARCHIVE:
+                if all(row[term[0]] == term[1] for term in ant['rule'][:-1]):
+                    predicted_class = labels[0]
+                    break
+            if predicted_class is None:
+                predicted_class = labels[1]
+
+            y_preds.append(predicted_class)
+        
+        return pd.Series(y_preds, index=X.index)
+
+
+
+    def evaluate(self, X, y, labels, prediction_strat):
         """
         Evaluate the performance of the discovered rules on a test set.
         """
-        y_pred = self.predict(X)
+        y_pred = predict_function(
+            X=X, archive=self.ARCHIVE, labels=labels, archive_type=self.archive_type, prediction_strat=prediction_strat
+        )
+
         accuracy = accuracy_score(y, y_pred)
         f1_score_v = f1_score(y, y_pred, average='weighted')
         recall = recall_score(y, y_pred, average='weighted')
         precision = precision_score(y, y_pred, average='weighted')
-        roc_auc = roc_auc_score(pd.get_dummies(y), pd.get_dummies(y_pred), average='weighted')
 
-        return accuracy, f1_score_v, recall, precision, roc_auc
+        return accuracy, f1_score_v, recall, precision
     
 
     def get_archive(self):

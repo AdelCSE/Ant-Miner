@@ -2,7 +2,7 @@ import pandas as pd
 
 def fitness_function(data: pd.DataFrame, rule: list) -> list:
     """
-    Computes the fitness of a rule based on Sensitivity and Specificity.
+    Computes the fitness of a rule based on Sensitivity and Confidence.
 
     Args:
         data (pd.DataFrame): The dataset containing the attributes and class labels.
@@ -10,14 +10,15 @@ def fitness_function(data: pd.DataFrame, rule: list) -> list:
                      where the last tuple is assumed to be ('class', target_class).
 
     Returns:
-        list: A list containing the fitness values [sensitivity, specificity].
+        list: A list containing the fitness values [sensitivity, confidence], F1-score.
     """
 
     fitness_sensitivity = 0.0
-    fitness_specificity = 0.0
+    fitness_confidence = 0.0
+    f1_score = 0.0
 
     if len(rule) == 0:
-        return [fitness_sensitivity, fitness_specificity]
+        return [fitness_sensitivity, fitness_confidence], f1_score
     
 
     target_class = rule[-1][1]
@@ -36,16 +37,16 @@ def fitness_function(data: pd.DataFrame, rule: list) -> list:
     # False Negatives (FN): Class is correct but rule does not match
     fn = len(data[(data['class'] == target_class)]) - tp
 
-    # True Negatives (TN): Class is not target and rule does not match
-    total_negatives = len(data[data['class'] != target_class])
-    tn = len(data) - tp - fp - fn
-
-    # Sensitivity = TP / (TP + FN)
+    # Sensitivity (Recall) = TP / (TP + FN) 
     if (tp + fn) > 0:
         fitness_sensitivity = tp / (tp + fn)
 
-    # Specificity = TN / (TN + FP)
-    if (tn + fp) > 0:
-        fitness_specificity = tn / (tn + fp)
+    # Confidence (Precision) = TP / (TP + FP)
+    if (tp + fp) > 0:
+        fitness_confidence = tp / (tp + fp)
 
-    return [fitness_sensitivity, fitness_specificity]
+    # F1 Score = 2 * (Precision * Recall) / (Precision + Recall)
+    if (fitness_sensitivity + fitness_confidence) > 0:
+        f1_score = 2 * (fitness_confidence * fitness_sensitivity) / (fitness_confidence + fitness_sensitivity)
+
+    return [fitness_sensitivity, fitness_confidence], f1_score

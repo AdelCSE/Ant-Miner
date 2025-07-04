@@ -86,6 +86,9 @@ def evaluate_rule(rule : list,
                   ) -> float:
     subset = data.copy()
 
+    if len(rule) == 0:
+        return 0.0, [0.0, 0.0]
+
     for term in rule[:-1]:
         subset = subset[subset[term[0]] == term[1]]
 

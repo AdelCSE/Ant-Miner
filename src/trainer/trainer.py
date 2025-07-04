@@ -40,11 +40,8 @@ def main(args: Args) -> None:
     X = dataframe.drop('class', axis=1)
     y = dataframe['class']
 
-    Total_time = 0
+    results = pd.DataFrame(columns=['fold', 'accuracy', 'f1_score', 'recall', 'precision', 'nb_rules', 'term_rule_ratio', 'time'])
 
-    accuracy_list = []
-    f1score_list = []
-    term_rule_ratio_list = []
     print(f'Starting cross-validation with {args.num_folds} folds...')
 
     sets = StratifiedKFold(n_splits=args.num_folds, shuffle=True, random_state=42)
@@ -68,19 +65,26 @@ def main(args: Args) -> None:
         ant_miner.fit(X_train, y_train)
         end_time = time.time()
 
-        accuracy= ant_miner.evaluate(X_test, y_test)
+        accuracy, f1, recall, precision= ant_miner.evaluate(X_test, y_test)
+
+        nb_rules = len(ant_miner.discovered_rules)
         term_rule_ratio = ant_miner.get_term_rule_ratios()
+        time_taken = end_time - start_time
 
-        Total_time += end_time - start_time
+        results.loc[k] = [k + 1, accuracy, f1, recall, precision, nb_rules, term_rule_ratio, time_taken]
 
-        print(f'Fold {k+1} completed in {end_time - start_time:.2f} seconds [Accuracy: {accuracy:.2f}, ')
-        accuracy_list.append(accuracy)
-        term_rule_ratio_list.append(term_rule_ratio)
-    
+        print(f'Fold {k+1} completed in {time_taken:.2f} seconds [Accuracy: {accuracy:.2f}, F1 Score: {f1:.2f}, Recall: {recall:.2f}, Precision: {precision:.2f}, Rules: {nb_rules}, Term/Rule Ratio: {term_rule_ratio:.2f}]')
 
-    print(f'\nTotal time for {args.num_folds} folds: {Total_time:.2f} seconds')
-    print(f'Average accuracy: {sum(accuracy_list) / len(accuracy_list):.2f} ± {pd.Series(accuracy_list).std():.2f}')
-    print(f'Average Term/Rule Ratio: {sum(term_rule_ratio_list) / len(term_rule_ratio_list):.2f} ± {pd.Series(term_rule_ratio_list).std():.2f}')
+    # Save results to CSV
+    results.to_csv('/home/adel/Documents/Code/Ant-Miner/results/AntMiner/lg_no_pruning_all.csv', index=False)
+
+    print(f"\nCross-validation completed within {results['time'].sum():.2f} seconds. {results['time'].mean():.2f} seconds per fold.")
+    print(f"Average Accuracy: {results['accuracy'].mean() * 100:.2f} ± {results['accuracy'].std() * 100:.2f}")
+    print(f"Average F1 Score: {results['f1_score'].mean() * 100:.2f} ± {results['f1_score'].std() * 100:.2f}")
+    print(f"Average Recall: {results['recall'].mean() * 100:.2f} ± {results['recall'].std() * 100:.2f}")
+    print(f"Average Precision: {results['precision'].mean() * 100:.2f} ± {results['precision'].std() * 100:.2f}")
+    print(f"Average Number of Rules: {results['nb_rules'].mean():.2f} ± {results['nb_rules'].std():.2f}")
+    print(f"Average Term/Rule Ratio: {results['term_rule_ratio'].mean():.2f} ± {results['term_rule_ratio'].std():.2f}")
 
 
 if __name__ == "__main__":
@@ -93,8 +97,8 @@ if __name__ == "__main__":
     parser.add_argument("--nb-converge", type=int, default=10, help="Number of rules used to test convergence of the ants")
     parser.add_argument("--alpha", type=int, default=1, help="Alpha parameter for pheromone importance")
     parser.add_argument("--beta", type=int, default=1, help="Beta parameter for heuristic importance")
-    parser.add_argument("--pruning", type=int, default=1, help="Enable rule pruning")
-    parser.add_argument("--num-folds", type=int, default=2, help="Number of folds for cross-validation")
+    parser.add_argument("--pruning", type=int, default=0, help="Enable rule pruning")
+    parser.add_argument("--num-folds", type=int, default=10, help="Number of folds for cross-validation")
 
     args = parser.parse_args()
     main(args)

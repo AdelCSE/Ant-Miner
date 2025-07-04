@@ -61,14 +61,6 @@ def assign_class(data : pd.DataFrame, rule : list) -> list:
     return rule
     
 
-def roulette_wheel(probabilities):
-    cumulative_sum = np.cumsum(probabilities)
-    r = np.random.rand()
-    for i, cs in enumerate(cumulative_sum):
-        if r < cs:
-            return i
-    return len(probabilities) - 1  # Fallback in case of floating-point errors
-
 def rule_covers_min_examples(data : pd.DataFrame, rule : list, threshold : int) -> bool:
     """
     Check if a rule covers at least a minimum number of examples in the dataset.

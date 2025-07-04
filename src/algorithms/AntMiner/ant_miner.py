@@ -1,8 +1,9 @@
 import pandas as pd
+import numpy as np
 import math
 
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule, plot_patero_front, update_EP
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
 
 class AntMiner:
@@ -29,7 +30,7 @@ class AntMiner:
         self.archive = []
         self.fitness_archive = []
         self.qualities = []
-
+        self.majority = None
 
     def _initialize_pheromones(self, terms : list) -> dict:
         """
@@ -107,7 +108,8 @@ class AntMiner:
             rule += [selected_term]
             used_attrs += [selected_term[0]]
 
-        rule = assign_class(data=data, rule=rule)
+        if len(rule) > 0:
+            rule = assign_class(data=data, rule=rule)
 
         return rule
 
@@ -221,27 +223,26 @@ class AntMiner:
                 
                 # construct the rule
                 rule = self._construct_rule(uncovered_data, all_terms, pheromones, heuristics)
+                rule_str = ""
 
-                if len(rule) < 2:
-                    continue
-
-                # prune the rule
-                if self.pruning:
-                    rule= self._prune_rule(rule, uncovered_data)
-
-                # evaluate the rule
-                quality, fitness = evaluate_rule(rule=rule, data=data)
-
-                # update pheromones
-                pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)
-
-                # store the rules
-                all_rules.append(rule)
-                qualities.append(quality)
-                fitnesses.append(fitness)
-                
-                # rule to string
-                rule_str = " AND ".join(sorted([f"{term[0]} = {term[1]}" for term in rule[:-1]])) + f" THEN {rule[-1][1]}"
+                if len(rule) > 0:
+                    # prune the rule
+                    if self.pruning:
+                        rule= self._prune_rule(rule, uncovered_data)
+    
+                    # evaluate the rule
+                    quality, fitness = evaluate_rule(rule=rule, data=data)
+    
+                    # update pheromones
+                    pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)
+    
+                    # store the rules
+                    all_rules.append(rule)
+                    qualities.append(quality)
+                    fitnesses.append(fitness)
+                    
+                    # rule to string
+                    rule_str = " AND ".join(sorted([f"{term[0]} = {term[1]}" for term in rule[:-1]])) + f" THEN {rule[-1][1]}"
 
                 # update convergence test
                 if prev_rule == rule_str:
@@ -252,8 +253,10 @@ class AntMiner:
                 prev_rule = rule_str
                 ant += 1
 
+            if len(all_rules) == 0:
+                break
             # choose the best rule
-            best_rule, best_quality, best_fitness = self._get_best_rule(all_rules, qualities, fitnesses)
+            best_rule, best_quality, best_fitness = self._get_best_rule(rules=all_rules, qualities=qualities, fitnesses=fitnesses)
 
             # archive the best rule
             self.discovered_rules.append(best_rule)
@@ -268,12 +271,13 @@ class AntMiner:
             )
 
             rule_str ="IF " + " AND ".join([f"({term[0]} = {term[1]})" for term in best_rule[:-1]]) + f" ==> (Class = {best_rule[-1][1]})"
-            #print(f'Rule: {rule_str}, Quality: {best_quality}')
+            print(f'Rule: {rule_str}, Quality: {best_quality}')
 
             # drop covered instances
             uncovered_data = self._drop_covered(best_rule, uncovered_data)
 
         #print(self.archive)
+        self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else None
 
         # Plot Pareto front if available
         #if len(self.fitness_archive) > 0:
@@ -285,21 +289,20 @@ class AntMiner:
         """
         Predict the class for new instances based on the best rule in the archive.
         """
-        if len(self.archive) == 0:
+        if len(self.discovered_rules) == 0:
             raise ValueError("No rules found in the archive. Run the algorithm first.")
         
-        class_labels = [rule[-1][1] for rule in self.discovered_rules]
-        majority_class = max(set(class_labels), key=class_labels.count)
+        # majority class in uncovered data
 
         y_preds = []
         for _, row in X.iterrows():
             predicted_class = None
-            for ant in self.archive:
-                if all(row[term[0]] == term[1] for term in ant['rule'][:-1]):
-                    predicted_class = ant['rule'][-1][1]
+            for rule in self.discovered_rules:
+                if all(row[term[0]] == term[1] for term in rule[:-1]):
+                    predicted_class = rule[-1][1]
                     break
             if predicted_class is None:
-                predicted_class = majority_class
+                predicted_class = self.majority
             y_preds.append(predicted_class)
         return pd.Series(y_preds, index=X.index)
     
@@ -318,9 +321,11 @@ class AntMiner:
     
     def evaluate(self, X, y):
         """
-        Evaluate the AntMiner model on the test data.
+        Evaluate the ruleMiner model on the test data.
         """
         y_pred = self.predict(X)
-        accuracy = (y_pred == y).mean()
+        accuracy = accuracy_score(y, y_pred)
         f1 = f1_score(y, y_pred, average='weighted')
-        return accuracy, f1
+        recall = recall_score(y, y_pred, average='weighted')
+        precision = precision_score(y, y_pred, average='weighted')
+        return accuracy, f1, recall, precision

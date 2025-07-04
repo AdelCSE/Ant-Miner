@@ -1,7 +1,7 @@
 from .utils import find_gmax
 from .fitness import fitness_function
 
-def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing_solution, T, lambda_weights):
+def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, positive_class, replacing_solution, T, lambda_weights):
 
     # Compute current ant's fitness scalar value
     ant_g = find_gmax(colony, lambda_weights, ant_index, ant_index)
@@ -15,6 +15,10 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
             continue
 
         new_rule = colony['ants'][i]['rule']
+        
+        if len(new_rule) == 0:
+            continue
+
         new_g = find_gmax(colony, lambda_weights, i, i)
 
         # Check if new_rule is already in the replacing_solution
@@ -28,9 +32,9 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, replacing
             continue
 
         # If neighbor solution better, replace current
-        if new_g > ant_g:
+        if new_g > ant_g and new_rule[-1][1] == positive_class:
             colony['ants'][ant_index]['rule'] = new_rule
-            colony['ants'][ant_index]['fitness'] = fitness_function(data=data, rule=new_rule)
+            colony['ants'][ant_index]['fitness'], colony['ants'][ant_index]['f1_score'] = fitness_function(data=data, rule=new_rule)
             ant_g = new_g
             best_rule = new_rule
             changed_rule = True
