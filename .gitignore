@@ -3,6 +3,8 @@ datasets
 datasets/**
 results
 results/**
+archive
+archive/**
 *.csv
 __pycache__
 aco_env

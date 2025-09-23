@@ -81,9 +81,7 @@ def assign_class(data : pd.DataFrame,
     return rule
 
 
-def evaluate_rule(rule : list, 
-                  data : pd.DataFrame
-                  ) -> float:
+def evaluate_rule(rule : list, data : pd.DataFrame, label: str) -> float:
     subset = data.copy()
 
     if len(rule) == 0:
@@ -92,9 +90,9 @@ def evaluate_rule(rule : list,
     for term in rule[:-1]:
         subset = subset[subset[term[0]] == term[1]]
 
-    tp = len(subset[subset['class'] == rule[-1][1]])
-    fp = len(subset[subset['class'] != rule[-1][1]])
-    fn = len(data[data['class'] == rule[-1][1]]) - tp
+    tp = len(subset[subset[label] == rule[-1][1]])
+    fp = len(subset[subset[label] != rule[-1][1]])
+    fn = len(data[data[label] == rule[-1][1]]) - tp
     tn = len(data) - tp - fp - fn
     
     sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0

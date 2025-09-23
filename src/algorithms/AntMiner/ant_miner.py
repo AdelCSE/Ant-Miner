@@ -5,7 +5,6 @@ import math
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule, plot_patero_front, update_EP
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
-
 class AntMiner:
 
     def __init__(self, 
@@ -119,7 +118,7 @@ class AntMiner:
         Prune the rule by removing terms until no further improvement is possible.
         """
         
-        best_quality = evaluate_rule(rule=rule, data=data)
+        best_quality = evaluate_rule(rule=rule, data=data, label='class')[0]
         pruned_rule = rule[:-1]
         
         while len(pruned_rule) > 1:
@@ -130,7 +129,7 @@ class AntMiner:
             for i, term in enumerate(pruned_rule):
                 temp_rule = pruned_rule[:i] + pruned_rule[i+1:]
                 temp_rule = assign_class(data=data, rule=temp_rule)
-                quality = evaluate_rule(rule=temp_rule, data=data)
+                quality = evaluate_rule(rule=temp_rule, data=data, label='class')[0]
 
                 if quality > best_improvement:
                     best_term_to_remove = term
@@ -231,7 +230,7 @@ class AntMiner:
                         rule= self._prune_rule(rule, uncovered_data)
     
                     # evaluate the rule
-                    quality, fitness = evaluate_rule(rule=rule, data=data)
+                    quality, fitness = evaluate_rule(rule=rule, data=data, label='class')
     
                     # update pheromones
                     pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, roc_auc_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
 
 # Import algorithm components
 from .colony import create_colony
@@ -14,14 +14,16 @@ from .archive import update_archive
 from .pheromones import update_pheromone
 from .neighborhood import find_best_neighborhood_rule
 from .prediction import predict_function
+from .utils import get_class_probs, compute_entropy, drop_covered, get_term_rule_ratio, update_reference_point
+from .hypervolume import hypervolume
 from .patero_front import plot_patero_front
-from .utils import get_class_probs, compute_entropy, drop_covered, remove_dominated_rules
+from .metrics import accuracy, recall, precision, f1_measure, hamming_loss, subset_accuracy, ranking_loss, one_error, coverage, average_precision
 
 
 class MOEA_D_AM():
     """
     Multi-Objective Evolutionary Algorithm based on Decomposition with Ant Colony Optimization (MOEA/D-ACO) 
-    for rule discovery in classification tasks..
+    for rule discovery in classification tasks.
 
     Args:
         population (int): Number of ants in the colony.
@@ -36,12 +38,17 @@ class MOEA_D_AM():
         beta (float): Weight for heuristic influence.
         delta (float): Pheromone update factor.
         pruning (int): Pruning strategy (0 for no pruning).
+        archive_type (str): Type of archive to maintain ('rules' or 'rulesets').
+        rulesets (str): Strategy for handling rulesets ('subproblem' or 'iteration').
+        ruleset_size (int): Size of each ruleset in the archive (default is 2).
+        random_state (int, optional): Random seed for reproducibility.
     
     Output:
         An instance of the MOEA_D_ACO class that can be used to run the algorithm
     """
 
-    def __init__(self, 
+    def __init__(self,
+                 task: str,
                  population: int, 
                  neighbors: int, 
                  groups: int, 
@@ -52,13 +59,16 @@ class MOEA_D_AM():
                  gamma: float, 
                  alpha: float, 
                  beta: float, 
-                 delta: float, 
                  pruning: int,
+                 decomposition: str,
                  archive_type: str,
                  rulesets: str,
                  random_state: int = None
     ) -> None:
         
+        # Task type: 'single-label' or 'multi-label'
+        self.task = task
+
         self.population = population
         self.neighbors = neighbors
         self.groups = groups
@@ -82,7 +92,6 @@ class MOEA_D_AM():
         self.pheromones = None
         self.tau_max = 1
         self.tau_min = 1
-        self.delta = delta * self.tau_max
 
         self.colony = {}
         self.ARCHIVE = []
@@ -92,9 +101,16 @@ class MOEA_D_AM():
         self.random_state = random_state
         self.majority = None
 
+        self.decomposition = decomposition
         self.archive_type = archive_type
         self.rulesets = rulesets
 
+        self.reference_point = np.array([0.0, 0.0])
+
+        self.priors = {}
+
+        self.hypervolume_history = []
+        self.all_points = []
 
 
     def init_weights(self):
@@ -110,75 +126,96 @@ class MOEA_D_AM():
             group = int(np.argmin(dists))
             self.lambda_groups[group].append(weight)
             self.ant_groups[i] = group
-            
 
 
-    def init_heuristics(self, data : pd.DataFrame):
+
+    def init_heuristics(self, data : pd.DataFrame, labels: list[str], terms: list[tuple]):
         """
         Initialize heuristic information for each term in subproblem i.
         """
-        nb_classes = data['class'].nunique()
-
         self.heuristics = {}
         numerator_terms = {}
+        num_classes = {label: data[label].nunique() for label in labels}
 
-        for attribute in data.columns[:-1]:
-            for value in data[attribute].unique():
-                probs = get_class_probs(data, attribute, value, 'class')
+        for attr, val in terms:
+            ig_sum = 0
+            for label in labels:
+                probs = get_class_probs(data, attr, val, label)
+                if not probs:
+                    continue
 
-                if len(probs) > 0:
-                    entropy = compute_entropy(probs)
-                    term = (attribute, value)
-                    numerator_terms[term] = math.log2(nb_classes) - entropy
-                    
+                entropy = compute_entropy(probs)
+                information_gain = math.log2(num_classes[label]) - entropy
+                ig_sum += information_gain 
+            
+            numerator_terms[(attr, val)] = ig_sum / len(labels) if labels else 0
+
         total = sum(numerator_terms.values())
         for term, value in numerator_terms.items():
             self.heuristics[term] = value / total if total != 0 else 0
-        
 
 
-    def init_pheromones(self, terms : list):
+
+    def init_pheromones(self, task: str, terms : list, labels: list[str] = []):
         """
         Initialize pheromone levels for each term in group k.
         """
         self.pheromones = {}
-        for k in range(self.groups):
-            pheromone = {term: 1.0 / len(terms) for term in terms}
-            self.pheromones[k] = pheromone
+        pheromone = {term: 1.0 / len(terms) for term in terms}
 
+        if task == 'single':
+            for k in range(self.groups):
+                self.pheromones[k] = pheromone
+        else:
+            for k in range(self.groups):
+                self.pheromones[k] = {}
+                for label in labels:
+                    self.pheromones[k][label] = pheromone
 
+            
 
     def init_neighborhood(self, population: int, neighbors: int):
         """
-        Initialize neighborhoods for each ant in the colony.
+        Initialize neighborhoods for each ant in the colony (circular neighborhood).
         """
         self.neighborhoods = {}
+        half = neighbors // 2
+
         for i in range(population):
-            lower = max(0, i - neighbors // 2)
-            upper = min(population, lower + neighbors)
-            self.neighborhoods[i] = np.arange(lower, upper)
-    
+            indices = [(i + j) % population for j in range(-half, half + 1)]
+            if neighbors % 2 == 0:
+                indices = indices[:-1]
+            self.neighborhoods[i] = np.array(indices)
 
 
-    def run(self, X, y, labels):
+    def run(self, data: pd.DataFrame, labels: list[str]):
 
-        data = X.copy()
-        data['class'] = y
-        positive_class = labels[0]
+        if self.task == 'multi':
+            self.priors = {
+                label: data[label].value_counts(normalize=True).get('1', 0)
+                for label in labels
+            }
+        else:
+            self.priors = {
+                'class': data['class'].value_counts(normalize=True).idxmax()
+            }
 
-        terms = [(col, val) for col in X.columns for val in X[col].unique()]
+        terms = [(col, val) for col in data.drop(columns=labels).columns for val in data[col].unique()]
         uncovered_data = data.copy()
 
         # Initialize colony parameters
         self.init_weights()
-        self.init_heuristics(data)
-        self.init_pheromones(terms)
+        self.init_heuristics(data, labels=labels, terms=terms)
+        self.init_pheromones(self.task, terms, labels)
+        self.init_neighborhood(self.population, self.neighbors)
 
         for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
 
+            iteration_points = []
+
             # Check if there is enough uncovered data
             if len(uncovered_data) <= self.max_uncovered:
-                #print(f"Early stopping at iteration {t} due to insufficient data.")
+                print(f"Early stopping at iteration {t} due to insufficient data.")
                 break
 
             # Desirability matrix
@@ -187,86 +224,112 @@ class MOEA_D_AM():
                 phi_matrix[i] = {}
                 for term in terms:
                     g = self.ant_groups[i]
-                    phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[term] ** self.beta)
+                    if self.task == 'multi':
+                        phi_matrix[i][term] = 0
+                        for label in labels:
+                            phi_matrix[i][term] += (self.pheromones[g][label][term] ** self.alpha) * (self.heuristics[term] ** self.beta)
+                        phi_matrix[i][term] /= len(labels)
+                    else:
+                        phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[term] ** self.beta)
 
             # Construct new colony
             self.colony = create_colony(
-                data=uncovered_data, attributes=X.columns.tolist(), terms=terms, population=self.population, 
-                gamma=self.gamma, phi=phi_matrix, min_examples=self.min_examples, random_state=self.random_state
+                task=self.task, data=uncovered_data, attributes=data.drop(columns=labels).columns.tolist(),
+                labels=labels, terms=terms, population=self.population, gamma=self.gamma, phi=phi_matrix, 
+                min_examples=self.min_examples, random_state=self.random_state
             )
 
             # Prune rules
             if self.pruning:
                 for i in range(self.population):
-                    self.colony['ants'][i]['rule'] = prune_rule(
-                        data=data, rule=self.colony['ants'][i]['rule']
-                    )
+                    if self.task == 'single':
+                        if len(self.colony['ants'][i]['rule']) > 2:
+                            self.colony['ants'][i]['rule'] = prune_rule(
+                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task
+                            )
+                    else:
+                        if any(len(rule['rule']) > 2 for rule in self.colony['ants'][i]['ruleset']['rules']):
+                            self.colony['ants'][i]['ruleset'] = prune_rule(
+                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task, labels=labels
+                            )
 
             # Fitness evaluation
             for i in range(self.population):
-                self.colony['ants'][i]['fitness'], self.colony['ants'][i]['f1_score'] = fitness_function(
-                    data=data, rule=self.colony['ants'][i]['rule']
+                fitness, f1_score = fitness_function(
+                    data=data, ant=self.colony['ants'][i], labels=labels, task=self.task
                 )
+                if self.task == 'single':
+                    self.colony['ants'][i]['fitness'] = fitness
+                    self.colony['ants'][i]['f1_score'] = f1_score
+                else:
+                    self.colony['ants'][i]['ruleset']['fitness'] = fitness
+                    self.colony['ants'][i]['ruleset']['f1_score'] = f1_score
 
+                iteration_points.append(fitness)
+            
             # Update archive
             best_ants_indices, self.ARCHIVE = update_archive(
-                colony=self.colony, archive=self.ARCHIVE, positive_class=positive_class, rulesets=self.rulesets,
+                colony=self.colony, archive=self.ARCHIVE, rulesets=self.rulesets,
             )
+
+            # Update reference point
+            if self.decomposition == 'tchebycheff':
+                self.reference_point = update_reference_point(self.reference_point, self.colony, self.task, maximize=True)
 
             # Update pheromones
             self.pheromones, self.tau_min, self.tau_max = update_pheromone(
-                pheromones=self.pheromones, colony=self.colony,
-                best_ants_indices=best_ants_indices, p=self.p, ant_groups=self.ant_groups, 
-                lambda_weights=self.lambda_weights, eps=self.eps
+                colony=self.colony, pheromones=self.pheromones, best_ants=best_ants_indices, 
+                p=self.p, ant_groups=self.ant_groups, lambda_weights=self.lambda_weights, 
+                eps=self.eps, decomposition=self.decomposition, reference=self.reference_point,
+                labels=labels,task=self.task
             )
 
-            
             # Update neighborhood solutions
             for i in range(self.population):
                 self.colony, self.replacing_solution = find_best_neighborhood_rule(
-                    self.colony, data, i, self.neighborhoods, positive_class,
-                    self.replacing_solution, self.neighbors, self.lambda_weights
+                    colony=self.colony, data=data, ant_index=i, neighborhood=self.neighborhoods,
+                    rep_list=self.replacing_solution, neighbors=self.neighbors, weights=self.lambda_weights,
+                    decomposition=self.decomposition, reference=self.reference_point, labels=labels,
+                    task=self.task
                 )
 
-            
+            """
             for i in best_ants_indices:
                 # Drop covered examples from uncovered_data
                 uncovered_data = drop_covered(
-                    best_rule=self.colony['ants'][i]['rule'],
+                    best_ant=self.colony['ants'][i],
                     data=uncovered_data,
+                    task=self.task
                 )
+            """
             
+            # store hypervolume history
+            hv_t = self.get_hypervolume()
+            self.hypervolume_history.append(hv_t)
+
+        self.all_points.extend(iteration_points)
+
         #self.ARCHIVE = remove_dominated_rules(self.ARCHIVE)
-        self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else None
 
         if self.rulesets == 'subproblem':
             self.ARCHIVE = [ant for ant in self.ARCHIVE if ant['f1_score'] > 0]
-
-
+        
         #pprint.pprint(self.ARCHIVE)
-        
-    
-    def get_term_rule_ratios(self):
 
-        if self.archive_type == 'rules':
-            terms = 0
-            for ant in self.ARCHIVE:
-                terms += len(ant['rule']) - 1
 
-            return terms / len(self.ARCHIVE) if self.ARCHIVE else 0
-        
-        elif self.archive_type == 'rulesets':
-            terms = 0
-            rules = 0
-            for ruleset in self.ARCHIVE:
-                for ant in ruleset['ruleset']:
-                    terms += len(ant['rule']) - 1
-                    rules += 1
-
-            return terms / rules if rules > 0 else 0
+    def predict(self, X: pd.DataFrame, archive: dict, archive_type: str, prediction_strat: str, labels: list[str], priors: dict, task: str):
+        """
+        Predict the class for new instances based on the discovered rules.
+        """
+        if self.task == 'single':
+            return predict_function(X=X, archive=archive, archive_type=archive_type, prediction_strat=prediction_strat, labels=labels, priors=priors, task=task)
+        elif self.task == 'multi':
+            return predict_function(X=X, archive=archive, archive_type=None, prediction_strat=None, labels=labels, priors=priors, task=task)
+        else:
+            raise ValueError("Unsupported task type. Use 'single' or 'multi'!")
 
     
-    def predict(self, X):
+    def predict_slc(self, X):
         """
         Predict the class for new instances based on the best rule in the archive.
         """
@@ -292,46 +355,116 @@ class MOEA_D_AM():
         return pd.Series(y_preds, index=X.index)
     
 
-
-    def partial_predict(self, X, labels):
+    def predict_mlc(self, data: pd.DataFrame, labels: list[str]) -> tuple[np.ndarray, np.ndarray]:
         """
-        Predict the class for new instances based on the best rule in the archive.
-        This method is similar to predict but returns a DataFrame with probabilities.
+        Predict the classes for new instances based on the discovered rulesets.
         """
-        if len(self.ARCHIVE) == 0:
-            raise ValueError("No rules found in the archive. Run the algorithm first.")
-        
+        n_samples = len(data)
+        n_labels = len(labels)
+        predictions = np.zeros((n_samples, n_labels), dtype=int)
+        scores = np.zeros((n_samples, n_labels), dtype=float)
 
-        y_preds = []
-        for _, row in X.iterrows():
-            predicted_class = None
+        # sort rulesets by quality
+        self.ARCHIVE = sorted(self.ARCHIVE, key=lambda x: x['ruleset']['f1_score'], reverse=True)
+
+        for idx, (_, row) in enumerate(data.iterrows()):
+            instance_preds = {}
+            instance_scores = {}
             for ant in self.ARCHIVE:
-                if all(row[term[0]] == term[1] for term in ant['rule'][:-1]):
-                    predicted_class = labels[0]
-                    break
-            if predicted_class is None:
-                predicted_class = labels[1]
+                for rule in ant['ruleset']['rules']:
 
-            y_preds.append(predicted_class)
-        
-        return pd.Series(y_preds, index=X.index)
+                    # separate antecedent vs consequent
+                    antecedent = [(attr, val) for (attr, val) in rule['rule'] if attr not in labels]
+                    consequent = [(attr, val) for (attr, val) in rule['rule'] if attr in labels]
+
+                    # check if antecedent matches
+                    if all(row[attr] == val for (attr, val) in antecedent):
+                        for i, (label, assigned) in enumerate(consequent):
+                            instance_preds[label] = assigned
+                            instance_scores[label] = rule['scores'][i][1]
+
+            
+            # fallback: assign majority for missing labels
+            for label in labels:
+                if label not in instance_preds:
+                    instance_preds[label] = 1 if self.priors.get(label) >= 0.5 else 0
+                    instance_scores[label] = self.priors.get(label)
+
+            predictions[idx] = [instance_preds[label] for label in labels]
+            scores[idx] = [instance_scores[label] for label in labels]
+
+        return predictions, scores
 
 
-
-    def evaluate(self, X, y, labels, prediction_strat):
+    def evaluate_slc(self, y_true, y_pred):
         """
         Evaluate the performance of the discovered rules on a test set.
         """
-        y_pred = predict_function(
-            X=X, archive=self.ARCHIVE, labels=labels, archive_type=self.archive_type, prediction_strat=prediction_strat
-        )
 
-        accuracy = accuracy_score(y, y_pred)
-        f1_score_v = f1_score(y, y_pred, average='weighted')
-        recall = recall_score(y, y_pred, average='weighted')
-        precision = precision_score(y, y_pred, average='weighted')
+        accuracy = accuracy_score(y_true, y_pred)
+        f1_score_v = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+        recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+        precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+        nb_rules = len(self.ARCHIVE) if self.archive_type == 'rules' else sum(len(ant['ruleset']) for ant in self.ARCHIVE)
+        tr_ratio = get_term_rule_ratio(self.ARCHIVE, self.archive_type, ['class'], self.task)
+        hypervolume = self.get_hypervolume()
 
-        return accuracy, f1_score_v, recall, precision
+        return accuracy, f1_score_v, recall, precision, nb_rules, tr_ratio, hypervolume
+
+
+    def evaluate_mlc(self, y_true: np.ndarray, y_pred: np.ndarray, labels: list[str], scores: np.ndarray) -> dict:
+        """
+        Evaluate multi-label classification performance using various metrics.
+        """
+        # to str
+        y_true = y_true.astype(np.int64)
+        y_pred = y_pred.astype(np.int64)
+        results = {}
+
+        results['acc'] = accuracy(y_true, y_pred)
+        results['recall'] = recall(y_true, y_pred, 'weighted')
+        results['precision'] = precision(y_true, y_pred, 'weighted')
+        results['f1_score'] = f1_measure(y_true, y_pred, 'weighted')
+        results['f1_macro'] = f1_measure(y_true, y_pred, 'macro')
+        results['f1_micro'] = f1_measure(y_true, y_pred, 'micro')
+        results['hamming_loss'] = hamming_loss(y_true, y_pred)
+        results['subset_acc'] = subset_accuracy(y_true, y_pred)
+        results['ranking_loss'] = ranking_loss(y_true, scores)
+        results['coverage'] = coverage(y_true, scores)
+        results['avg_precision'] = average_precision(y_true, scores)
+        results['hypervolume'] = self.get_hypervolume()
+        results['nb_rulesets'] = len(self.ARCHIVE)
+        results['term_rule_ratio'] = get_term_rule_ratio(self.ARCHIVE, self.archive_type, labels, self.task)
+
+        return results
+
+
+    def get_hypervolume(self):
+        """
+        Get the hypervolume of the discovered rules.
+        """
+        if len(self.ARCHIVE) == 0:
+            return 0.0
+
+
+        front = np.array([ant['fitness'] if self.task == 'single' else ant['ruleset']['fitness'] for ant in self.ARCHIVE])
+        reference_point = np.array([0.0, 0.0])
+
+        return hypervolume(front, reference_point)
+    
+
+    def get_hv_history(self):
+        """
+        Get the history of hypervolume values over iterations.
+        """
+        return self.hypervolume_history
+    
+
+    def get_all_points(self):
+        """
+        Get all points (objectives) explored during the optimization.
+        """
+        return self.all_points
     
 
     def get_archive(self):
@@ -339,6 +472,12 @@ class MOEA_D_AM():
         Get the archive of discovered rules.
         """
         return self.ARCHIVE
+    
+    def get_priors(self):
+        """
+        Get the class priors.
+        """
+        return self.priors
     
 
     def get_ant_colony(self):
