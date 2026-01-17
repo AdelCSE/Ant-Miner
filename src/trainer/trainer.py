@@ -26,6 +26,9 @@ class Args:
     beta : int
     pruning : int
     num_folds : int
+    objs : list
+    dataset : str
+    runs : int = 1
 
 
 def main(args: Args) -> None:
@@ -34,58 +37,58 @@ def main(args: Args) -> None:
     """
     # Load the dataset
     DATA_DIR = dotenv.get_key(env, 'SLC_DATA_DIR')
+    SAVE_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR')
 
-    dataframe = pd.read_csv(DATA_DIR)
+    dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv')
 
     X = dataframe.drop('class', axis=1)
     y = dataframe['class']
 
-    results = pd.DataFrame(columns=['fold', 'accuracy', 'f1_score', 'recall', 'precision', 'nb_rules', 'term_rule_ratio', 'time'])
-
-    print(f'Starting cross-validation with {args.num_folds} folds...')
+    results = pd.DataFrame(columns=['run', 'fold', 'split', 'accuracy', 'f1_score', 'recall', 'precision', 'specificity', 'nb_rules', 'term_rule_ratio', 'time'])
 
     sets = StratifiedKFold(n_splits=args.num_folds, shuffle=True, random_state=42)
-    for k, (train_index, test_index) in enumerate(sets.split(X, y)):
-        print(f'\n - Fold {k+1} / {args.num_folds}:')
 
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+    for run_id in range(1, args.runs + 1):
+        print(f'\n=== Run {run_id} / {args.runs} ===')
+        for k, (train_index, test_index) in enumerate(sets.split(X, y)):
+            #print(f'\n - Fold {k+1} / {args.num_folds}:')
+    
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+    
+            ant_miner = AntMiner(
+                max_ants=args.max_ants,
+                max_uncovered=args.max_uncovered,
+                min_covers=args.min_covers,
+                nb_converge=args.nb_converge,
+                alpha=args.alpha,
+                beta=args.beta,
+                pruning=args.pruning,
+                objs=args.objs
+            )
+    
+            start_time = time.time()
+            ant_miner.fit(X_train, y_train)
+            end_time = time.time()
+    
+            tr_acc, tr_f1, tr_rec, tr_prec, tr_spec = ant_miner.evaluate(X_train, y_train)
+            ts_acc, ts_f1, ts_rec, ts_prec, ts_spec = ant_miner.evaluate(X_test, y_test)
+    
+            nb_rules = len(ant_miner.discovered_rules)
+            term_rule_ratio = ant_miner.get_term_rule_ratios()
+            time_taken = end_time - start_time
+    
+            results.loc[len(results)] = [run_id, k + 1, 'train', tr_acc, tr_f1, tr_rec, tr_prec, tr_spec, nb_rules, term_rule_ratio, time_taken]
+            results.loc[len(results)] = [run_id, k + 1, 'test', ts_acc, ts_f1, ts_rec, ts_prec, ts_spec, nb_rules, term_rule_ratio, time_taken]
 
-        ant_miner = AntMiner(
-            max_ants=args.max_ants,
-            max_uncovered=args.max_uncovered,
-            min_covers=args.min_covers,
-            nb_converge=args.nb_converge,
-            alpha=args.alpha,
-            beta=args.beta,
-            pruning=args.pruning
-        )
+            #print(f'  Fold {k+1}/{args.num_folds} Train: [Acc: {tr_acc*100:.2f}, F1: {tr_f1*100:.2f}, Recall: {tr_rec*100:.2f}, Precision: {tr_prec*100:.2f}, Specificity:{tr_spec*100:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]')
+            #print(f'  Fold {k+1}/{args.num_folds} Test:  [Acc: {ts_acc*100:.2f}, F1: {ts_f1*100:.2f}, Recall: {ts_rec*100:.2f}, Precision: {ts_prec*100:.2f}, Specificity:{ts_spec*100:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]') 
+    
+    objs_str = '_'.join([obj[:4] for obj in args.objs])
+    results.to_csv(SAVE_DIR + f'/AM/{args.dataset}_{objs_str}.csv', index=False)
 
-        start_time = time.time()
-        ant_miner.fit(X_train, y_train)
-        end_time = time.time()
-
-        accuracy, f1, recall, precision= ant_miner.evaluate(X_test, y_test)
-
-        nb_rules = len(ant_miner.discovered_rules)
-        term_rule_ratio = ant_miner.get_term_rule_ratios()
-        time_taken = end_time - start_time
-
-        results.loc[k] = [k + 1, accuracy, f1, recall, precision, nb_rules, term_rule_ratio, time_taken]
-
-        print(f'Fold {k+1} completed in {time_taken:.2f} seconds [Accuracy: {accuracy:.2f}, F1 Score: {f1:.2f}, Recall: {recall:.2f}, Precision: {precision:.2f}, Rules: {nb_rules}, Term/Rule Ratio: {term_rule_ratio:.2f}]')
-
-    # Save results to CSV
-    #results.to_csv('/home/adel/Documents/Code/Ant-Miner/results/AntMiner/lg_no_pruning_all.csv', index=False)
-
-    print(f"\nCross-validation completed within {results['time'].sum():.2f} seconds. {results['time'].mean():.2f} seconds per fold.")
-    print(f"Average Accuracy: {results['accuracy'].mean() * 100:.2f} ± {results['accuracy'].std() * 100:.2f}")
-    print(f"Average F1 Score: {results['f1_score'].mean() * 100:.2f} ± {results['f1_score'].std() * 100:.2f}")
-    print(f"Average Recall: {results['recall'].mean() * 100:.2f} ± {results['recall'].std() * 100:.2f}")
-    print(f"Average Precision: {results['precision'].mean() * 100:.2f} ± {results['precision'].std() * 100:.2f}")
-    print(f"Average Number of Rules: {results['nb_rules'].mean():.2f} ± {results['nb_rules'].std():.2f}")
-    print(f"Average Term/Rule Ratio: {results['term_rule_ratio'].mean():.2f} ± {results['term_rule_ratio'].std():.2f}")
-
+    print(f"\nAverage results over {args.runs} runs:")
+    print(results.groupby('split').mean())
 
 if __name__ == "__main__":
 
@@ -97,8 +100,11 @@ if __name__ == "__main__":
     parser.add_argument("--nb-converge", type=int, default=10, help="Number of rules used to test convergence of the ants")
     parser.add_argument("--alpha", type=int, default=1, help="Alpha parameter for pheromone importance")
     parser.add_argument("--beta", type=int, default=1, help="Beta parameter for heuristic importance")
-    parser.add_argument("--pruning", type=int, default=1, help="Enable rule pruning")
+    parser.add_argument("--pruning", type=int, default=0, help="Enable rule pruning")
     parser.add_argument("--num-folds", type=int, default=5, help="Number of folds for cross-validation")
+    parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Fitness objectives for multi-objective optimization")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
+    parser.add_argument("--runs", type=int, default=5, help="Number of runs to average results over")
 
     args = parser.parse_args()
     main(args)

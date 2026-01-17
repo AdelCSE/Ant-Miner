@@ -42,16 +42,19 @@ class Args:
     random_state : int
     runs : int
 
+    objs : list
+    dataset : str
 
-def run_once(args: Args, X, y, labels, run_id: int, archive: dict):
+
+def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
     """
     Executes one run of MOEA/D-AM with or without cross-validation.
     Returns the results dataframe for this run.
     """
     if args.task == 'single':
         results = pd.DataFrame(columns=[
-            'run', 'fold', 'accuracy', 'f1_score', 'recall', 'precision',
-            'hypervolume', 'nb_rules', 'term_rule_ratio', 'time'
+            'run', 'fold', 'split', 'accuracy', 'f1_score', 'recall', 'precision', 'specificity',
+            'nb_rules', 'term_rule_ratio', 'hypervolume', 'time'
         ])
     else:
         results = pd.DataFrame(columns=[
@@ -90,6 +93,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict):
                 decomposition=args.decomposition,
                 archive_type=args.archive_type,
                 rulesets=args.rulesets,
+                objs=objs,
                 random_state=args.random_state
             )
 
@@ -114,20 +118,30 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict):
             }
 
             if args.task == 'single':
-                y_pred, _, _ = moea_d_aco.predict(X=test, archive=fold_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
-                acc, f1, recall, precision, nb_rules, term_rule_ratio, hypervolume = moea_d_aco.evaluate_slc(y_true=y_test, y_pred=y_pred)
+                y_pred_train, _, _ = moea_d_aco.predict(X=train, archive=fold_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
+                tr_acc, tr_f1, tr_rec, tr_precn, tr_spec, tr_nbr, tr_trr, tr_hv = moea_d_aco.evaluate_slc(y_true=y_train, y_pred=y_pred_train)
 
                 results.loc[len(results)] = [
-                    run_id, (k % args.folds) + 1, acc*100, f1*100, recall*100, precision*100,
-                    hypervolume, nb_rules, term_rule_ratio, end_time - start_time
+                    run_id, (k % args.folds) + 1, 'train', tr_acc*100, tr_f1*100, tr_rec*100, tr_precn*100, tr_spec*100,
+                    tr_nbr, tr_trr, tr_hv, end_time - start_time
                 ]
 
-                print (f"  Fold {k+1}/{args.folds}: [Acc: {acc*100:.2f}, F1: {f1*100:.2f}, Recall: {recall*100:.2f}, Precision: {precision*100:.2f}, HV: {hypervolume:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]")
+                y_pred_test, _, _ = moea_d_aco.predict(X=test, archive=fold_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
+                ts_acc, ts_f1, ts_rec, ts_precn, ts_spec, ts_nbr, ts_trr, ts_hv = moea_d_aco.evaluate_slc(y_true=y_test, y_pred=y_pred_test)
+
+                results.loc[len(results)] = [
+                    run_id, (k % args.folds) + 1, 'test', ts_acc*100, ts_f1*100, ts_rec*100, ts_precn*100, ts_spec*100,
+                    ts_nbr, ts_trr, ts_hv, end_time - start_time
+                ]
+
+                #print (f'Fold {k+1}/{args.folds} Train: [Acc: {tr_acc*100:.2f}, F1: {tr_f1*100:.2f}, Recall: {tr_rec*100:.2f}, Precision: {tr_precn*100:.2f}, Specificity:{tr_spec*100:.2f}, HV: {tr_hv:.2f}, Rules: {tr_nbr}, TRR: {tr_trr:.2f}]')
+                #print (f'Fold {k+1}/{args.folds} Test:  [Acc: {ts_acc*100:.2f}, F1: {ts_f1*100:.2f}, Recall: {ts_rec*100:.2f}, Precision: {ts_precn*100:.2f}, Specificity:{ts_spec*100:.2f}, HV: {ts_hv:.2f}, Rules: {ts_nbr}, TRR: {ts_trr:.2f}]')
             else:
+
                 y_pred, scores, _ = moea_d_aco.predict(X=test, archive=fold_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
                 metrics = moea_d_aco.evaluate_mlc(y_true=y_test.to_numpy(), y_pred=y_pred.to_numpy(), labels=labels, scores=scores.to_numpy())
                 results.loc[len(results)] = [
-                    run_id, (k % args.folds) + 1, metrics['acc']*100, metrics['f1_score']*100, metrics['f1_macro']*100, 
+                    run_id, (k % args.folds) + 1, 'test', metrics['acc']*100, metrics['f1_score']*100, metrics['f1_macro']*100, 
                     metrics['f1_micro']*100, metrics['recall']*100, metrics['precision']*100, metrics['hamming_loss'],
                     metrics['subset_acc']*100, metrics['ranking_loss'], metrics['coverage'], 
                     metrics['avg_precision']*100, metrics['hypervolume'], metrics['nb_rulesets'], 
@@ -181,20 +195,28 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict):
             'priors': priors
         }
         if args.task == 'single':
-            y_pred, _, _ = moea_d_aco.predict(X=test, archive=run_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
-            acc, f1, recall, precision, nb_rules, term_rule_ratio, hypervolume = moea_d_aco.evaluate_slc(y_true=y_test, y_pred=y_pred)
+            y_pred_train, _, _ = moea_d_aco.predict(X=train, archive=run_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
+            tr_acc, tr_f1, tr_rec, tr_precn, tr_spec, tr_nbr, tr_trr, tr_hv = moea_d_aco.evaluate_slc(y_true=y_train, y_pred=y_pred_train)
 
             results.loc[len(results)] = [
-                run_id, 1, acc*100, f1*100, recall*100, precision*100,
-                hypervolume, nb_rules, term_rule_ratio, time_taken
+                run_id, 1, 'train', tr_acc*100, tr_f1*100, tr_rec*100, tr_precn*100, tr_spec*100,
+                tr_nbr, tr_trr, tr_hv, time_taken
             ]
 
-            print (f"  [Acc: {acc*100:.2f}, F1: {f1*100:.2f}, Recall: {recall*100:.2f}, Precision: {precision*100:.2f}, HV: {hypervolume:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]")
+            y_pred_test, _, _ = moea_d_aco.predict(X=test, archive=run_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
+            ts_acc, ts_f1, ts_rec, ts_precn, ts_spec, ts_nbr, ts_trr, ts_hv = moea_d_aco.evaluate_slc(y_true=y_test, y_pred=y_pred_test)
+
+            results.loc[len(results)] = [
+                run_id, 1, 'test', ts_acc*100, ts_f1*100, ts_rec*100, ts_precn*100, ts_spec*100,
+                ts_nbr, ts_trr, ts_hv, time_taken
+            ]
+
+            #print (f"  [Acc: {tr_acc*100:.2f}, F1: {tr_f1*100:.2f}, Recall: {tr_rec*100:.2f}, Precision: {tr_precn*100:.2f}, Specificity:{tr_spec*100:.2f}, HV: {tr_hv:.2f}, Rules: {tr_nbr}, TRR: {tr_trr:.2f}]")
         else:
             y_pred, scores, _ = moea_d_aco.predict(X=test, archive=run_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
             metrics = moea_d_aco.evaluate_mlc(y_true=y_test.to_numpy(), y_pred=y_pred.to_numpy(), labels=labels, scores=scores.to_numpy())
             results.loc[len(results)] = [
-                run_id, 1, metrics['acc']*100, metrics['f1_score']*100, metrics['f1_macro']*100, 
+                run_id, 1, 'test', metrics['acc']*100, metrics['f1_score']*100, metrics['f1_macro']*100, 
                 metrics['f1_micro']*100, metrics['recall']*100, metrics['precision']*100, metrics['hamming_loss'],
                 metrics['subset_acc']*100, metrics['ranking_loss'], metrics['coverage'], 
                 metrics['avg_precision']*100, metrics['hypervolume'], metrics['nb_rulesets'], 
@@ -210,36 +232,33 @@ def main(args: Args) -> None:
     # Get env variables
     DATA_DIR = dotenv.get_key(env, 'SLC_DATA_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_DATA_DIR')
     RESULTS_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_RESULTS_DIR')
-    ARCHIVE_DIR = dotenv.get_key(env, 'SLC_ARCHIVE_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_ARCHIVE_DIR')
+    #ARCHIVE_DIR = dotenv.get_key(env, 'SLC_ARCHIVE_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_ARCHIVE_DIR')
 
     # Load dataset
     if args.task == 'single':
-        dataframe = pd.read_csv(DATA_DIR, dtype=str)
+        dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv', dtype=str)
     else:
-        dataframe = pd.read_csv(DATA_DIR)
+        dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv')
 
     labels = ['class'] if args.task == 'single' else [name for name in dataframe.columns if 'label' in name]
     X = dataframe.drop(columns=labels)
     y = dataframe[labels] if args.task == 'multi' else dataframe['class']
 
+    """
     dataset = DATA_DIR.split('/')[-1].split('.')[0]
     pruning_sfx = '_p' if args.pruning else '_np'
     decomposition_sfx =  '_ws' if args.decomposition == 'weighted' else '_tch'
+    """
 
     all_results = pd.DataFrame()
     archive = {}
 
     for run_id in range(1, args.runs+1):
-        print(f"\n=== Starting Run {run_id}/{args.runs} ===\n")
-        run_results, archive = run_once(args, X, y, labels, run_id, archive)
+        print(f'\n=== Run {run_id} / {args.runs} ===')
+        run_results, archive = run_once(args, X, y, labels, run_id, archive, args.objs)
         all_results = pd.concat([all_results, run_results], ignore_index=True)
 
-        if args.task == 'single':
-            print (f"Run {run_id} completed in {run_results['time'].mean():.2f} seconds: [Acc: {run_results['accuracy'].mean():.2f} ± {run_results['accuracy'].std():.2f}, F1: {run_results['f1_score'].mean():.2f} ± {run_results['f1_score'].std():.2f}, Recall: {run_results['recall'].mean():.2f} ± {run_results['recall'].std():.2f}, Precision: {run_results['precision'].mean():.2f} ± {run_results['precision'].std():.2f}, HV: {run_results['hypervolume'].mean():.2f} ± {run_results['hypervolume'].std():.2f}, Rules: {run_results['nb_rules'].mean():.2f} ± {run_results['nb_rules'].std():.2f}, TRR: {run_results['term_rule_ratio'].mean():.2f} ± {run_results['term_rule_ratio'].std():.2f}]")
-        else:
-            print (f"Run {run_id} completed in {run_results['time'].mean():.2f} seconds: [Acc: {run_results['acc'].mean():.2f} ± {run_results['acc'].std():.2f}, F1 Score: {run_results['f1_score'].mean():.2f} ± {run_results['f1_score'].std():.2f}, F1 Macro: {run_results['f1_macro'].mean():.2f} ± {run_results['f1_macro'].std():.2f}, F1 Micro: {run_results['f1_micro'].mean():.2f} ± {run_results['f1_micro'].std():.2f}, Recall: {run_results['recall'].mean():.2f} ± {run_results['recall'].std():.2f}, Precision: {run_results['precision'].mean():.2f} ± {run_results['precision'].std():.2f}, Hamming Loss: {run_results['hamming_loss'].mean():.4f} ± {run_results['hamming_loss'].std():.4f}, Subset Acc: {run_results['subset_acc'].mean():.2f} ± {run_results['subset_acc'].std():.2f}, Ranking Loss: {run_results['ranking_loss'].mean():.4f} ± {run_results['ranking_loss'].std():.4f}, Coverage: {run_results['coverage'].mean():.4f} ± {run_results['coverage'].std():.4f}, Avg Precision: {run_results['avg_precision'].mean():.2f} ± {run_results['avg_precision'].std():.2f}, HV: {run_results['hypervolume'].mean():.2f} ± {run_results['hypervolume'].std():.2f}, Rulesets: {run_results['nb_rulesets'].mean():.2f} ± {run_results['nb_rulesets'].std():.2f}, TRR: {run_results['term_rule_ratio'].mean():.2f} ± {run_results['term_rule_ratio'].std():.2f}]")
-
-
+    """
     folder = "CV" if args.cross_val else "ALL"
     # Save archive
     archive_path = f"{ARCHIVE_DIR}/MOEA_D_AM/{folder}"
@@ -248,18 +267,22 @@ def main(args: Args) -> None:
     # Save aggregated results
     save_path = f"{RESULTS_DIR}/MOEA_D_AM/{folder}"
     os.makedirs(save_path, exist_ok=True)
+    """
 
     # print average results
     if args.task == 'single':
         print(f"\nAverage results over {args.runs} runs:")
-        print(f" - Avg. Time: {all_results['time'].mean():.2f} ± {all_results['time'].std():.2f}")
-        print(f" - Avg. Accuracy: {all_results['accuracy'].mean():.2f} ± {all_results['accuracy'].std():.2f}")
-        print(f" - Avg. F1 Score: {all_results['f1_score'].mean():.2f} ± {all_results['f1_score'].std():.2f}")
-        print(f" - Avg. Recall: {all_results['recall'].mean():.2f} ± {all_results['recall'].std():.2f}")
-        print(f" - Avg. Precision: {all_results['precision'].mean():.2f} ± {all_results['precision'].std():.2f}")
-        print(f" - Avg. Hypervolume: {all_results['hypervolume'].mean():.2f} ± {all_results['hypervolume'].std():.2f}")
-        print(f" - Avg. Rules: {all_results['nb_rules'].mean():.2f} ± {all_results['nb_rules'].std():.2f}")
-        print(f" - Avg. Term-Rule Ratio: {all_results['term_rule_ratio'].mean():.2f} ± {all_results['term_rule_ratio'].std():.2f}")
+        print(all_results.groupby('split').mean())
+
+        # save results
+        SAVE_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR')
+        objs_str = '_'.join([obj[:4] for obj in args.objs])
+        if args.archive_type == 'rules':
+            all_results.to_csv(SAVE_DIR + f'/MOEAAM/{args.dataset}_{objs_str}.csv', index=False)
+        else:
+            all_results.to_csv(SAVE_DIR + f'/MOEAAM_RS/{args.dataset}_{objs_str}.csv', index=False)
+
+
     else:
         print(f"\nAverage results over {args.runs} runs:")
         print(f" - Avg. Time: {all_results['time'].mean():.2f} ± {all_results['time'].std():.2f}")
@@ -279,11 +302,13 @@ def main(args: Args) -> None:
         print(f" - Avg. Term-Rule Ratio: {all_results['term_rule_ratio'].mean():.2f} ± {all_results['term_rule_ratio'].std():.2f}")
 
 
-    
+
+    """
     with open(f"{archive_path}/{dataset}{decomposition_sfx}{pruning_sfx}_r{args.runs}.json", 'w') as f:
         json.dump(archive, f, indent=4)
     
     all_results.to_csv(f"{save_path}/{dataset}{decomposition_sfx}{pruning_sfx}_r{args.runs}.csv", index=False)
+    """
 
 
 if __name__ == "__main__":
@@ -306,14 +331,17 @@ if __name__ == "__main__":
     parser.add_argument("--decomposition", type=str, default="weighted", choices=["weighted", "tchebycheff"], help="Decomposition method")
     parser.add_argument("--archive-type", type=str, default="rules", choices=["rules", "rulesets"], help="Structure of the archive")
     parser.add_argument("--rulesets", type=str, default=None, choices=[None, 'iteration', 'subproblem'], help="Ruleset formation strategy")
-    parser.add_argument("--ruleset-size", type=int, default=2, help="Number of rules per ruleset (if rulesets formation is used)")
+    parser.add_argument("--ruleset-size", type=int, default=10, help="Number of rules per ruleset (if rulesets formation is used)")
     parser.add_argument("--prediction-strat", type=str, default="all", choices=["all", "best", "reference", "voting"], help="Prediction strategy")
 
-    parser.add_argument("--cross-val", type=int, default=0, help="Use cross-validation (1) or train-test split (0)")
+    parser.add_argument("--cross-val", type=int, default=1, help="Use cross-validation (1) or train-test split (0)")
     parser.add_argument("--folds", type=int, default=5, help="Number of folds for cross-validation")
     parser.add_argument("--random-state", type=int, default=None, help="Random state for reproducibility")
 
-    parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
+    parser.add_argument("--runs", type=int, default=5, help="Number of independent runs")
+
+    parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Fitness objectives for multi-objective optimization")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
 
     args = parser.parse_args()
     main(args)

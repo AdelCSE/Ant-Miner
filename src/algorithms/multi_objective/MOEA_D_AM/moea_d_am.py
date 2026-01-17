@@ -1,10 +1,11 @@
 import math
 import pprint
+import time
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, confusion_matrix
 
 # Import algorithm components
 from .colony import create_colony
@@ -63,6 +64,7 @@ class MOEA_D_AM():
                  decomposition: str,
                  archive_type: str,
                  rulesets: str,
+                 objs: list,
                  random_state: int = None
     ) -> None:
         
@@ -77,6 +79,8 @@ class MOEA_D_AM():
         self.min_examples = min_examples
         self.max_uncovered = max_uncovered
         self.pruning = pruning
+
+        self.objs = objs
 
         self.alpha = alpha
         self.beta = beta
@@ -209,7 +213,16 @@ class MOEA_D_AM():
         self.init_pheromones(self.task, terms, labels)
         self.init_neighborhood(self.population, self.neighbors)
 
-        for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
+        
+        
+        t = 0
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > 30:
+                #print(f"Stopping at iteration {t} due to time limit.")
+                break
+        
+        #for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
 
             iteration_points = []
 
@@ -245,18 +258,18 @@ class MOEA_D_AM():
                     if self.task == 'single':
                         if len(self.colony['ants'][i]['rule']) > 2:
                             self.colony['ants'][i]['rule'] = prune_rule(
-                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task
+                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task, labels=['class'], objs=self.objs
                             )
                     else:
                         if any(len(rule['rule']) > 2 for rule in self.colony['ants'][i]['ruleset']['rules']):
                             self.colony['ants'][i]['ruleset'] = prune_rule(
-                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task, labels=labels
+                                data=uncovered_data, ant=self.colony['ants'][i], task=self.task, labels=labels, objs=self.objs
                             )
 
             # Fitness evaluation
             for i in range(self.population):
                 fitness, f1_score = fitness_function(
-                    data=data, ant=self.colony['ants'][i], labels=labels, task=self.task
+                    data=data, ant=self.colony['ants'][i], labels=labels, task=self.task, objs=self.objs
                 )
                 if self.task == 'single':
                     self.colony['ants'][i]['fitness'] = fitness
@@ -290,7 +303,7 @@ class MOEA_D_AM():
                     colony=self.colony, data=data, ant_index=i, neighborhood=self.neighborhoods,
                     rep_list=self.replacing_solution, neighbors=self.neighbors, weights=self.lambda_weights,
                     decomposition=self.decomposition, reference=self.reference_point, labels=labels,
-                    task=self.task
+                    task=self.task, objs=self.objs
                 )
 
             """
@@ -408,8 +421,10 @@ class MOEA_D_AM():
         nb_rules = len(self.ARCHIVE) if self.archive_type == 'rules' else sum(len(ant['ruleset']) for ant in self.ARCHIVE)
         tr_ratio = get_term_rule_ratio(self.ARCHIVE, self.archive_type, ['class'], self.task)
         hypervolume = self.get_hypervolume()
+        tn, fp, _, _ = confusion_matrix(y_true, y_pred).ravel()
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
 
-        return accuracy, f1_score_v, recall, precision, nb_rules, tr_ratio, hypervolume
+        return accuracy, f1_score_v, recall, precision, specificity, nb_rules, tr_ratio, hypervolume
 
 
     def evaluate_mlc(self, y_true: np.ndarray, y_pred: np.ndarray, labels: list[str], scores: np.ndarray) -> dict:

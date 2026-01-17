@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import math
+import time
 
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule, plot_patero_front, update_EP
-from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, confusion_matrix
 
 class AntMiner:
 
@@ -14,7 +15,8 @@ class AntMiner:
                  nb_converge : int = 10, 
                  alpha : int = 1,
                  beta : int = 1,
-                 pruning : int = 1
+                 pruning : int = 1,
+                 objs : list = ['specificity', 'sensitivity']
     ) -> None:
                 
         self.max_ants = max_ants
@@ -24,12 +26,14 @@ class AntMiner:
         self.alpha = alpha
         self.beta = beta
         self.pruning = pruning
+        self.objs = objs
 
         self.discovered_rules = []
         self.archive = []
         self.fitness_archive = []
         self.qualities = []
         self.majority = None
+
 
     def _initialize_pheromones(self, terms : list) -> dict:
         """
@@ -86,7 +90,9 @@ class AntMiner:
         rule = []
         used_attrs = []
 
-        while check_attributes_left(attrs=data.columns.tolist(), sub_attrs=used_attrs):
+        all_atrs = set([term[0] for term in all_terms])
+
+        while check_attributes_left(attrs=all_atrs, sub_attrs=used_attrs):
 
             probs = calculate_terms_probs(terms=all_terms, 
                                           pheromones=pheromone, 
@@ -95,7 +101,7 @@ class AntMiner:
                                           alpha=self.alpha, 
                                           beta=self.beta
                                           )
-            
+
             selected_term = select_term(terms=all_terms, 
                                         used_attrs=used_attrs, 
                                         p=probs
@@ -118,7 +124,7 @@ class AntMiner:
         Prune the rule by removing terms until no further improvement is possible.
         """
         
-        best_quality = evaluate_rule(rule=rule, data=data, label='class')[0]
+        best_quality = evaluate_rule(rule=rule, data=data, label='class', objs=self.objs)[0]
         pruned_rule = rule[:-1]
         
         while len(pruned_rule) > 1:
@@ -129,7 +135,7 @@ class AntMiner:
             for i, term in enumerate(pruned_rule):
                 temp_rule = pruned_rule[:i] + pruned_rule[i+1:]
                 temp_rule = assign_class(data=data, rule=temp_rule)
-                quality = evaluate_rule(rule=temp_rule, data=data, label='class')[0]
+                quality = evaluate_rule(rule=temp_rule, data=data, label='class', objs=self.objs)[0]
 
                 if quality > best_improvement:
                     best_term_to_remove = term
@@ -194,7 +200,6 @@ class AntMiner:
         """
         Fit the AntMiner model to the training data.
         """
-
         data = X.copy()
         data['class'] = y
 
@@ -204,8 +209,17 @@ class AntMiner:
         # compute heuristic values
         heuristics = self._initialize_heuristics(uncovered_data, 'class')
 
-        while len(uncovered_data) > self.max_uncovered:
+        #while len(uncovered_data) > self.max_uncovered:
+        start_time = time.time()
+        while True:
 
+            if time.time() - start_time > 30:
+                #print(f"Stopping due to time limit.")
+                break
+
+            if len(uncovered_data) <= self.max_uncovered:
+                uncovered_data = data.copy()
+            
             # initialize pheromone levels
             pheromones = self._initialize_pheromones(all_terms)
 
@@ -230,7 +244,7 @@ class AntMiner:
                         rule= self._prune_rule(rule, uncovered_data)
     
                     # evaluate the rule
-                    quality, fitness = evaluate_rule(rule=rule, data=data, label='class')
+                    quality, fitness = evaluate_rule(rule=rule, data=data, label='class', objs=self.objs)
     
                     # update pheromones
                     pheromones = self._update_pheromones(pheromones, rule, all_terms, quality)
@@ -252,8 +266,10 @@ class AntMiner:
                 prev_rule = rule_str
                 ant += 1
 
+            
             if len(all_rules) == 0:
-                break
+                continue
+            
             # choose the best rule
             best_rule, best_quality, best_fitness = self._get_best_rule(rules=all_rules, qualities=qualities, fitnesses=fitnesses)
 
@@ -270,7 +286,7 @@ class AntMiner:
             )
 
             rule_str ="IF " + " AND ".join([f"({term[0]} = {term[1]})" for term in best_rule[:-1]]) + f" ==> (Class = {best_rule[-1][1]})"
-            print(f'Rule: {rule_str}, Quality: {best_quality}')
+            #print(f'Rule: {rule_str}, Quality: {best_quality}')
 
             # drop covered instances
             uncovered_data = self._drop_covered(best_rule, uncovered_data)
@@ -327,4 +343,11 @@ class AntMiner:
         f1 = f1_score(y, y_pred, average='weighted')
         recall = recall_score(y, y_pred, average='weighted')
         precision = precision_score(y, y_pred, average='weighted')
-        return accuracy, f1, recall, precision
+
+        # specificity
+        cm = confusion_matrix(y, y_pred)
+        tn = cm[0, 0]
+        fp = cm[0, 1]
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+        
+        return accuracy, f1, recall, precision, specificity

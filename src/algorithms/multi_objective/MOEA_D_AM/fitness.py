@@ -1,6 +1,6 @@
 import pandas as pd
 
-def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str) -> list:
+def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str, objs: list) -> list:
     """
     Computes the fitness of a rule based on Sensitivity and Confidence.
 
@@ -13,7 +13,9 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
         list: A list containing the fitness values [sensitivity, confidence], F1-score.
     """
 
-    total_confidence, total_sensitivity, total_simplicity = [], [], []
+    total_confidence, total_sensitivity, total_simplicity, total_specificity = [], [], [], []
+    fitness_specificity, fitness_simplicity = 0.0, 0.0
+    specificity, simplicity = 0.0, 0.0
     #total_specificity, total_f1_macro, total_f1_micro = [], [], []
     
 
@@ -30,7 +32,7 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
             continue
 
         rule_confidence, rule_sensitivity= [], []
-        #rule_specificity = []
+        rule_specificity = []
 
         antecedent = [term for term in rule if term[0] not in labels]
         consequent = [term for term in rule if term[0] in labels]
@@ -44,14 +46,10 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
 
         for label, pred_val in consequent:
 
-            # True Positives (TP): Rule matches and class is correct
-            tp = len(subset[subset[label] == pred_val])
-
-            # False Positives (FP): Rule matches but class is wrong
-            fp = len(subset[subset[label] != pred_val])
-
-            # False Negatives (FN): Class is correct but rule does not match
-            fn = len(data[data[label] == pred_val]) - tp
+            tp = len(data[(data.index.isin(subset.index)) & (data[label] == pred_val)])
+            fp = len(data[(data.index.isin(subset.index)) & (data[label] != pred_val)])
+            fn = len(data[(~data.index.isin(subset.index)) & (data[label] == pred_val)])
+            tn = len(data[(~data.index.isin(subset.index)) & (data[label] != pred_val)])
 
             # Sensitivity (Recall) = TP / (TP + FN)
             sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -60,22 +58,25 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
             confidence = tp / (tp + fp) if (tp + fp) > 0 else 0.0
 
             # Specificity = TN / (TN + FP)
-            #tn = len(subset[subset[label] != pred_val])
-            #specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            if 'specificity' in objs:
+                specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+                rule_specificity.append(specificity)
 
             rule_sensitivity.append(sensitivity)
             rule_confidence.append(confidence)
-            #rule_specificity.append(specificity)
-
-        
+            
         avg_confidence = sum(rule_confidence) / len(rule_confidence) if rule_confidence else 0.0
         avg_sensitivity = sum(rule_sensitivity) / len(rule_sensitivity) if rule_sensitivity else 0.0
-        #avg_specificity = sum(rule_specificity) / len(rule_specificity) if rule_specificity else 0.0
+
+        avg_specificity = 0.0
+        if 'specificity' in objs:
+            avg_specificity = sum(rule_specificity) / len(rule_specificity) if rule_specificity else 0.0
+    
         f1_score = (2 * avg_sensitivity * avg_confidence) / (avg_sensitivity + avg_confidence) if (avg_sensitivity + avg_confidence) > 0 else 0.0
 
-
-
-        simplicity = 1 / len(antecedent) if len(antecedent) > 0 else 0.0
+        if 'simplicity' in objs:
+            simplicity = 1 / len(antecedent) if len(antecedent) > 0 else 0.0
+            total_simplicity.append(simplicity)
 
         """
         if len(labels) > 1:
@@ -87,21 +88,26 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
 
         total_confidence.append(avg_confidence)
         total_sensitivity.append(avg_sensitivity)
-        #total_specificity.append(avg_specificity)
+        if 'specificity' in objs:
+            total_specificity.append(avg_specificity)
         #total_f1_macro.append(avg_f1_macro)
         #total_f1_micro.append(avg_f1_micro)
-        total_simplicity.append(simplicity)
+        
     
     fitness_sensitivity = sum(total_sensitivity) / len(total_sensitivity) if total_sensitivity else 0.0
     fitness_confidence = sum(total_confidence) / len(total_confidence) if total_confidence else 0.0
-    #fitness_specificity = sum(total_specificity) / len(total_specificity) if total_specificity else 0.0
-    fitness_simplicity = sum(total_simplicity) / len(total_simplicity) if total_simplicity else 0.0
+
+    if 'specificity' in objs:
+        fitness_specificity = sum(total_specificity) / len(total_specificity) if total_specificity else 0.0
+    if 'simplicity' in objs:
+        fitness_simplicity = sum(total_simplicity) / len(total_simplicity) if total_simplicity else 0.0
+
     #fitness_f1_macro = sum(total_f1_macro) / len(total_f1_macro) if total_f1_macro else 0.0
     #fitness_f1_micro = sum(total_f1_micro) / len(total_f1_micro) if total_f1_micro else 0.0
 
     f1_score = (2 * fitness_sensitivity * fitness_confidence) / (fitness_sensitivity + fitness_confidence) if (fitness_sensitivity + fitness_confidence) > 0 else 0.0
 
-    return [fitness_confidence, fitness_simplicity], f1_score
+    return [fitness_specificity, fitness_sensitivity], f1_score
 
 
 def f1_macro(subset: pd.DataFrame, data: pd.DataFrame, consequent) -> float:

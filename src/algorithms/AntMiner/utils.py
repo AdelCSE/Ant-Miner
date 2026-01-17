@@ -56,7 +56,6 @@ def select_term(terms : list,
                 p : list
                 ) -> tuple:
     
-
     # remove the terms that are already used
     available_terms = [term for term in terms if term[0] not in used_attrs]
 
@@ -81,7 +80,7 @@ def assign_class(data : pd.DataFrame,
     return rule
 
 
-def evaluate_rule(rule : list, data : pd.DataFrame, label: str) -> float:
+def evaluate_rule(rule : list, data : pd.DataFrame, label: str, objs: list) -> float:
     subset = data.copy()
 
     if len(rule) == 0:
@@ -94,11 +93,23 @@ def evaluate_rule(rule : list, data : pd.DataFrame, label: str) -> float:
     fp = len(subset[subset[label] != rule[-1][1]])
     fn = len(data[data[label] == rule[-1][1]]) - tp
     tn = len(data) - tp - fp - fn
-    
-    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
 
-    return sensitivity * specificity, [sensitivity, specificity]
+    specificity, sensitivity, confidence, simplicity = 0, 0, 0, 0
+
+    for metric in objs:
+        if metric == 'sensitivity':
+            sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        elif metric == 'specificity':
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        elif metric == 'confidence':
+            confidence = tp / (tp + fp) if (tp + fp) > 0 else 0
+        elif metric == 'simplicity':
+            antecedent_length = len(rule) - 1
+            simplicity = 1 / antecedent_length if antecedent_length > 0 else 0
+        else:
+            raise ValueError(f"Unknown fitness metric: {metric}")
+
+    return specificity * sensitivity, [specificity, sensitivity]
 
 def plot_patero_front(archive: list) -> None:
 

@@ -2,7 +2,7 @@ import pandas as pd
 from .fitness import fitness_function
 from .utils import assign_class
 
-def prune_rule(data : pd.DataFrame, ant : dict, task: str, labels: list[str]) -> list:
+def prune_rule(data : pd.DataFrame, ant : dict, task: str, labels: list[str], objs: list) -> list:
 
     """
     Prune the rule by removing terms until no further improvement is possible.
@@ -10,7 +10,7 @@ def prune_rule(data : pd.DataFrame, ant : dict, task: str, labels: list[str]) ->
 
     if task == 'single':
         # ant is a dict with 'rule' and 'fitness'
-        best_quality, _ = fitness_function(data=data, ant=ant, labels=['class'], task=task)
+        best_quality, _ = fitness_function(data=data, ant=ant, labels=['class'], task=task, objs=objs)
         pruned_rule = ant['rule'][:-1]
     
         while len(pruned_rule) > 1:

@@ -121,7 +121,8 @@ def predict_function(X, archive, archive_type, prediction_strat, labels, priors,
     Predicts class labels for the given data using the rules or rulesets from the archive.
     """
     if len(archive) == 0:
-        raise ValueError("No rules found in the archive. Run the algorithm first.")
+        #raise ValueError("No rules found in the archive. Run the algorithm first.")
+        return pd.Series(['neg'] * len(X), index=X.index), None, None
 
     triggered = {
         'rules': [],
