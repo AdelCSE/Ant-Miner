@@ -108,9 +108,18 @@ def evaluate_rule(rule : list, data : pd.DataFrame, label: str, objs: list) -> f
             simplicity = 1 / antecedent_length if antecedent_length > 0 else 0
         else:
             raise ValueError(f"Unknown fitness metric: {metric}")
-
-    return specificity * sensitivity, [specificity, sensitivity]
-
+    
+    if 'sensitivity' in objs and 'specificity' in objs:
+        return sensitivity * specificity, [sensitivity, specificity]
+    elif 'simplicity' in objs and 'confidence' in objs:
+        return confidence * simplicity, [confidence, simplicity]
+    elif 'confidence' in objs and 'specificity' in objs:
+        return confidence * specificity, [confidence, specificity]
+    elif 'confidence' in objs and 'sensitivity' in objs:
+        return confidence * sensitivity, [confidence, sensitivity]
+    else:
+        raise ValueError("Unsupported combination of objectives.")
+    
 def plot_patero_front(archive: list) -> None:
 
     if len(archive) == 0:

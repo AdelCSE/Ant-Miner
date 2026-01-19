@@ -1,5 +1,5 @@
 # 1. Define Datasets
-$datasets = @("mushrooms", "tictactoe", "hepatitis", "ljubljana", "cargood", "chess", "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks")
+$datasets = @("mushrooms", "tictactoe", "hepatitis", "ljubljana", "cargood", "chess") #, "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
 
 # 2. Define Fitness Combinations
 $fitness_groups = @(
@@ -22,6 +22,8 @@ foreach ($d in $datasets) {
         # PowerShell automatically unpacks the array $f into separate arguments
         # So this executes: python trainer.py --dataset yeast3 --objs confidence simplicity
         
+        python trainer.py --dataset $d --objs $f
+        python moea_trainer.py --dataset $d --objs $f
         python moea_trainer.py --dataset $d --objs $f --archive-type rulesets --rulesets iteration
     }
 }
