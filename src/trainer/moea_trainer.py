@@ -92,6 +92,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
                 pruning=args.pruning,
                 decomposition=args.decomposition,
                 archive_type=args.archive_type,
+                prediction_strat=args.prediction_strat,
                 rulesets=args.rulesets,
                 objs=objs,
                 random_state=args.random_state
@@ -101,19 +102,19 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
             test = pd.concat([X_test, y_test], axis=1)
 
             start_time = time.time()
-            moea_d_aco.run(data=train, labels=labels)
+            moea_d_aco.run(data=train, labels=labels, Val_data=test)
             end_time = time.time()
 
-            hv_history = moea_d_aco.get_hv_history()
-            all_points = moea_d_aco.get_all_points()
+            #hv_history = moea_d_aco.get_hv_history()
+            #all_points = moea_d_aco.get_all_points()
             priors = moea_d_aco.get_priors()
-
+            training_history = moea_d_aco.training_history
             fold_archive = moea_d_aco.ARCHIVE
+
             archive[f"run_{run_id}"] = archive.get(f"run_{run_id}", {})
             archive[f"run_{run_id}"][f"fold_{k+1}"] = {
                 'archive': fold_archive,
-                'all': all_points,
-                'hv': hv_history,
+                'history': training_history,
                 'priors': priors
             }
 
@@ -134,8 +135,6 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
                     ts_nbr, ts_trr, ts_hv, end_time - start_time
                 ]
 
-                #print (f'Fold {k+1}/{args.folds} Train: [Acc: {tr_acc*100:.2f}, F1: {tr_f1*100:.2f}, Recall: {tr_rec*100:.2f}, Precision: {tr_precn*100:.2f}, Specificity:{tr_spec*100:.2f}, HV: {tr_hv:.2f}, Rules: {tr_nbr}, TRR: {tr_trr:.2f}]')
-                #print (f'Fold {k+1}/{args.folds} Test:  [Acc: {ts_acc*100:.2f}, F1: {ts_f1*100:.2f}, Recall: {ts_rec*100:.2f}, Precision: {ts_precn*100:.2f}, Specificity:{ts_spec*100:.2f}, HV: {ts_hv:.2f}, Rules: {ts_nbr}, TRR: {ts_trr:.2f}]')
             else:
 
                 y_pred, scores, _ = moea_d_aco.predict(X=test, archive=fold_archive, archive_type=args.archive_type, prediction_strat=args.prediction_strat, labels=labels, priors=priors, task=args.task)
@@ -171,6 +170,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
             pruning=args.pruning,
             decomposition=args.decomposition,
             archive_type=args.archive_type,
+            prediction_strat=args.prediction_strat,
             rulesets=args.rulesets,
             random_state=args.random_state
         )
@@ -232,8 +232,7 @@ def main(args: Args) -> None:
     # Get env variables
     DATA_DIR = dotenv.get_key(env, 'SLC_DATA_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_DATA_DIR')
     RESULTS_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_RESULTS_DIR')
-    #ARCHIVE_DIR = dotenv.get_key(env, 'SLC_ARCHIVE_DIR') if args.task == 'single' else dotenv.get_key(env, 'MLC_ARCHIVE_DIR')
-
+    
     # Load dataset
     if args.task == 'single':
         dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv', dtype=str)
@@ -258,6 +257,7 @@ def main(args: Args) -> None:
         run_results, archive = run_once(args, X, y, labels, run_id, archive, args.objs)
         all_results = pd.concat([all_results, run_results], ignore_index=True)
 
+
     """
     folder = "CV" if args.cross_val else "ALL"
     # Save archive
@@ -276,12 +276,17 @@ def main(args: Args) -> None:
 
         # save results
         SAVE_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR')
+        MODELS_DIR = dotenv.get_key(env, 'SLC_MODELS_DIR')
         objs_str = '_'.join([obj[:4] for obj in args.objs])
         if args.archive_type == 'rules':
             all_results.to_csv(SAVE_DIR + f'/MOEAAM/{args.dataset}_{objs_str}.csv', index=False)
+            with open(MODELS_DIR + f'/MOEAAM/{args.dataset}_{objs_str}.json', 'w') as f:
+                json.dump(archive, f, indent=4)
+
         else:
             all_results.to_csv(SAVE_DIR + f'/MOEAAM_RS/{args.dataset}_{objs_str}.csv', index=False)
-
+            with open(MODELS_DIR + f'/MOEAAM_RS/{args.dataset}_{objs_str}.json', 'w') as f:
+                json.dump(archive, f, indent=4)
 
     else:
         print(f"\nAverage results over {args.runs} runs:")

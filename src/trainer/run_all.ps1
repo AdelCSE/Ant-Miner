@@ -1,5 +1,5 @@
 # 1. Define Datasets
-$datasets = @("mushrooms", "tictactoe", "hepatitis", "ljubljana", "cargood", "chess") #, "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
+$datasets = @("tictactoe", "hepatitis", "ljubljana", "cargood", "chess", "mushrooms") #, "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
 
 # 2. Define Fitness Combinations
 $fitness_groups = @(

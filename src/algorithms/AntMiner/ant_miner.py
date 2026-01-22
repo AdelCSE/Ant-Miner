@@ -34,6 +34,10 @@ class AntMiner:
         self.qualities = []
         self.majority = None
 
+        self.training_history = {
+            'train': [],
+            'test': []
+        }
 
     def _initialize_pheromones(self, terms : list) -> dict:
         """
@@ -196,7 +200,7 @@ class AntMiner:
         return uncovered_data
 
 
-    def fit(self, X, y):
+    def fit(self, X, y, X_val, y_val):
         """
         Fit the AntMiner model to the training data.
         """
@@ -213,7 +217,7 @@ class AntMiner:
         start_time = time.time()
         while True:
 
-            if time.time() - start_time > 30:
+            if time.time() - start_time > 10:
                 #print(f"Stopping due to time limit.")
                 break
 
@@ -291,13 +295,31 @@ class AntMiner:
             # drop covered instances
             uncovered_data = self._drop_covered(best_rule, uncovered_data)
 
-        #print(self.archive)
+            # store convergence
+            self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else None
+            self.store_convergence(X=X, y=y, X_val=X_val, y_val=y_val)
+
         self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else None
 
-        # Plot Pareto front if available
-        #if len(self.fitness_archive) > 0:
-            #plot_patero_front(archive=self.fitness_archive)
 
+    def store_convergence(self, X, y, X_val, y_val):
+        tr_acc, tr_f1, tr_recall, tr_precision, tr_specificity = self.evaluate(X=X, y=y)
+        val_acc, val_f1, val_recall, val_precision, val_specificity = self.evaluate(X=X_val, y=y_val)
+
+        self.training_history['train'].append({
+            'accuracy': tr_acc,
+            'f1_score': tr_f1,
+            'recall': tr_recall,
+            'precision': tr_precision,
+            'specificity': tr_specificity
+        })
+        self.training_history['test'].append({
+            'accuracy': val_acc,
+            'f1_score': val_f1,
+            'recall': val_recall,
+            'precision': val_precision,
+            'specificity': val_specificity
+        })
 
 
     def predict(self, X):
@@ -338,16 +360,14 @@ class AntMiner:
         """
         Evaluate the ruleMiner model on the test data.
         """
-        y_pred = self.predict(X)
-        accuracy = accuracy_score(y, y_pred)
-        f1 = f1_score(y, y_pred, average='weighted')
-        recall = recall_score(y, y_pred, average='weighted')
-        precision = precision_score(y, y_pred, average='weighted')
 
-        # specificity
-        cm = confusion_matrix(y, y_pred)
-        tn = cm[0, 0]
-        fp = cm[0, 1]
+        y_pred = self.predict(X)
+        tn, fp, fn, tp = confusion_matrix(y_true=y, y_pred=y_pred, labels=['neg', 'pos']).ravel()
+
+        accuracy = (tn + tp) / (tn + tp + fn + fp) if (tn + tp + fn + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
         
         return accuracy, f1, recall, precision, specificity

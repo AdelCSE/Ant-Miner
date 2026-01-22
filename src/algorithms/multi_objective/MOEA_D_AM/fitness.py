@@ -46,10 +46,10 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
 
         for label, pred_val in consequent:
 
-            tp = len(data[(data.index.isin(subset.index)) & (data[label] == pred_val)])
-            fp = len(data[(data.index.isin(subset.index)) & (data[label] != pred_val)])
-            fn = len(data[(~data.index.isin(subset.index)) & (data[label] == pred_val)])
-            tn = len(data[(~data.index.isin(subset.index)) & (data[label] != pred_val)])
+            tp = len(subset[subset[label] == pred_val])
+            fp = len(subset[subset[label] != pred_val])
+            fn = len(data[data[label] == pred_val]) - tp
+            tn = len(data) - (tp + fp + fn)
 
             # Sensitivity (Recall) = TP / (TP + FN)
             sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0
@@ -110,11 +110,11 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
     if 'sensitivity' in objs and 'specificity' in objs:
         return [fitness_specificity, fitness_sensitivity], f1_score
     elif 'simplicity' in objs and 'confidence' in objs:
-        return [fitness_simplicity, fitness_confidence], f1_score
+        return [fitness_confidence, fitness_simplicity], f1_score
     elif 'confidence' in objs and 'specificity' in objs:
-        return [fitness_specificity, fitness_confidence], f1_score
+        return [fitness_confidence, fitness_specificity], f1_score
     elif 'confidence' in objs and 'sensitivity' in objs:
-        return [fitness_sensitivity, fitness_confidence], f1_score
+        return [fitness_confidence, fitness_sensitivity], f1_score
     else:
         raise ValueError("Unsupported combination of objectives.")
 

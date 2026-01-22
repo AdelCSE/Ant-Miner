@@ -2,6 +2,7 @@ import pandas as pd
 import dotenv
 import time
 import sys
+import json
 from sklearn.model_selection import StratifiedKFold
 
 from argparse import ArgumentParser
@@ -38,6 +39,7 @@ def main(args: Args) -> None:
     # Load the dataset
     DATA_DIR = dotenv.get_key(env, 'SLC_DATA_DIR')
     SAVE_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR')
+    MODELS_DIR = dotenv.get_key(env, 'SLC_MODELS_DIR')
 
     dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv')
 
@@ -45,6 +47,7 @@ def main(args: Args) -> None:
     y = dataframe['class']
 
     results = pd.DataFrame(columns=['run', 'fold', 'split', 'accuracy', 'f1_score', 'recall', 'precision', 'specificity', 'nb_rules', 'term_rule_ratio', 'time'])
+    model = {}
 
     sets = StratifiedKFold(n_splits=args.num_folds, shuffle=True, random_state=42)
 
@@ -68,7 +71,7 @@ def main(args: Args) -> None:
             )
     
             start_time = time.time()
-            ant_miner.fit(X_train, y_train)
+            ant_miner.fit(X=X_train, y=y_train, X_val=X_test, y_val=y_test)
             end_time = time.time()
     
             tr_acc, tr_f1, tr_rec, tr_prec, tr_spec = ant_miner.evaluate(X_train, y_train)
@@ -80,12 +83,19 @@ def main(args: Args) -> None:
     
             results.loc[len(results)] = [run_id, k + 1, 'train', tr_acc, tr_f1, tr_rec, tr_prec, tr_spec, nb_rules, term_rule_ratio, time_taken]
             results.loc[len(results)] = [run_id, k + 1, 'test', ts_acc, ts_f1, ts_rec, ts_prec, ts_spec, nb_rules, term_rule_ratio, time_taken]
+            
+            fold_archive = ant_miner.discovered_rules
+            fold_history = ant_miner.training_history
+            model[f'run_{run_id}'] = model.get(f'run_{run_id}', {})
+            model[f'run_{run_id}'][f'fold_{k+1}'] = {
+                'archive': fold_archive,
+                'history': fold_history
+            }
 
-            #print(f'  Fold {k+1}/{args.num_folds} Train: [Acc: {tr_acc*100:.2f}, F1: {tr_f1*100:.2f}, Recall: {tr_rec*100:.2f}, Precision: {tr_prec*100:.2f}, Specificity:{tr_spec*100:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]')
-            #print(f'  Fold {k+1}/{args.num_folds} Test:  [Acc: {ts_acc*100:.2f}, F1: {ts_f1*100:.2f}, Recall: {ts_rec*100:.2f}, Precision: {ts_prec*100:.2f}, Specificity:{ts_spec*100:.2f}, Rules: {nb_rules}, TRR: {term_rule_ratio:.2f}]') 
-    
     objs_str = '_'.join([obj[:4] for obj in args.objs])
     results.to_csv(SAVE_DIR + f'/AM/{args.dataset}_{objs_str}.csv', index=False)
+    with open(MODELS_DIR + f'/AM/{args.dataset}_{objs_str}.json', 'w') as f:
+        json.dump(model, f, indent=4)
 
     print(f"\nAverage results over {args.runs} runs:")
     print(results.groupby('split').mean())

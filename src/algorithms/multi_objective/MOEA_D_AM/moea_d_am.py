@@ -63,6 +63,7 @@ class MOEA_D_AM():
                  pruning: int,
                  decomposition: str,
                  archive_type: str,
+                 prediction_strat: str,
                  rulesets: str,
                  objs: list,
                  random_state: int = None
@@ -108,6 +109,7 @@ class MOEA_D_AM():
         self.decomposition = decomposition
         self.archive_type = archive_type
         self.rulesets = rulesets
+        self.prediction_strat = prediction_strat
 
         self.reference_point = np.array([0.0, 0.0])
 
@@ -116,6 +118,10 @@ class MOEA_D_AM():
         self.hypervolume_history = []
         self.all_points = []
 
+        self.training_history = {
+            'train': [],
+            'test': []
+        }
 
     def init_weights(self):
         """
@@ -192,7 +198,7 @@ class MOEA_D_AM():
             self.neighborhoods[i] = np.array(indices)
 
 
-    def run(self, data: pd.DataFrame, labels: list[str]):
+    def run(self, data: pd.DataFrame, labels: list[str], Val_data: pd.DataFrame = None):
 
         if self.task == 'multi':
             self.priors = {
@@ -218,7 +224,7 @@ class MOEA_D_AM():
         t = 0
         start_time = time.time()
         while True:
-            if time.time() - start_time > 30:
+            if time.time() - start_time > 5:
                 #print(f"Stopping at iteration {t} due to time limit.")
                 break
         
@@ -315,7 +321,10 @@ class MOEA_D_AM():
                     task=self.task
                 )
             """
-            
+            # store convergence
+            if self.task == 'single':
+                self.store_convergence(X=data.drop(columns=labels), y=data[labels[0]], X_val=Val_data.drop(columns=labels), y_val=Val_data[labels[0]])
+
             # store hypervolume history
             hv_t = self.get_hypervolume()
             self.hypervolume_history.append(hv_t)
@@ -328,6 +337,29 @@ class MOEA_D_AM():
             self.ARCHIVE = [ant for ant in self.ARCHIVE if ant['f1_score'] > 0]
         
         #pprint.pprint(self.ARCHIVE)
+
+
+    def store_convergence(self, X, y, X_val, y_val):
+        ypred, _, _ = self.predict(X, archive=self.ARCHIVE, archive_type=self.archive_type, prediction_strat=self.prediction_strat, labels=['class'], priors=self.priors, task='single')
+        y_pred_val, _, _ = self.predict(X_val, archive=self.ARCHIVE, archive_type=self.archive_type, prediction_strat=self.prediction_strat, labels=['class'], priors=self.priors, task='single')
+
+        tr_acc, tr_f1, tr_recall, tr_precision, tr_specificity, _, _, _ = self.evaluate_slc(y_true=y, y_pred=ypred)
+        val_acc, val_f1, val_recall, val_precision, val_specificity, _, _, _ = self.evaluate_slc(y_true=y_val, y_pred=y_pred_val)
+
+        self.training_history['train'].append({
+            'accuracy': tr_acc,
+            'f1_score': tr_f1,
+            'recall': tr_recall,
+            'precision': tr_precision,
+            'specificity': tr_specificity
+        })
+        self.training_history['test'].append({
+            'accuracy': val_acc,
+            'f1_score': val_f1,
+            'recall': val_recall,
+            'precision': val_precision,
+            'specificity': val_specificity
+        })
 
 
     def predict(self, X: pd.DataFrame, archive: dict, archive_type: str, prediction_strat: str, labels: list[str], priors: dict, task: str):
@@ -413,16 +445,17 @@ class MOEA_D_AM():
         """
         Evaluate the performance of the discovered rules on a test set.
         """
+        tn, fp, fn, tp = confusion_matrix(y_true=y_true, y_pred=y_pred, labels=['neg', 'pos']).ravel()
 
-        accuracy = accuracy_score(y_true, y_pred)
-        f1_score_v = f1_score(y_true, y_pred, average='weighted', zero_division=0)
-        recall = recall_score(y_true, y_pred, average='weighted', zero_division=0)
-        precision = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+        accuracy = (tn + tp) / (tn + tp + fn + fp) if (tn + tp + fn + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        f1_score_v = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+        
         nb_rules = len(self.ARCHIVE) if self.archive_type == 'rules' else sum(len(ant['ruleset']) for ant in self.ARCHIVE)
         tr_ratio = get_term_rule_ratio(self.ARCHIVE, self.archive_type, ['class'], self.task)
         hypervolume = self.get_hypervolume()
-        tn, fp, _, _ = confusion_matrix(y_true, y_pred).ravel()
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
 
         return accuracy, f1_score_v, recall, precision, specificity, nb_rules, tr_ratio, hypervolume
 
