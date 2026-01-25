@@ -283,8 +283,8 @@ if __name__ == "__main__":
     
     # Algorithm Parameters
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (without .csv)")
-    parser.add_argument("--population", type=int, default=5, help="Number of subproblems (Decomposition size)")
-    parser.add_argument("--ants", type=int, default=10, help="Number of ants competing per subproblem")
+    parser.add_argument("--population", type=int, default=6, help="Number of subproblems (Decomposition size)")
+    parser.add_argument("--ants", type=int, default=40, help="Number of ants competing per subproblem")
     parser.add_argument("--neighbors", type=int, default=3, help="T - Neighborhood size")
     parser.add_argument("--groups", type=int, default=2, help="Number of weight groups")
     
