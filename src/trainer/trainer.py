@@ -114,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-folds", type=int, default=5, help="Number of folds for cross-validation")
     parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Fitness objectives for multi-objective optimization")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
-    parser.add_argument("--runs", type=int, default=10, help="Number of runs to average results over")
+    parser.add_argument("--runs", type=int, default=5, help="Number of runs to average results over")
 
     args = parser.parse_args()
     main(args)

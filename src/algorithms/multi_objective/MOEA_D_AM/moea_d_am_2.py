@@ -69,7 +69,6 @@ class MOEA_D_AM_2():
                  random_state: int = None
     ) -> None:
         
-        # Task type: 'single-label' or 'multi-label'
         self.task = task
 
         self.population = population

@@ -190,14 +190,18 @@ class AntMiner2:
         """
         Drop the instances covered by the best rule.
         """
+        state = False
         subset = uncovered_data.copy()
         for term in best_rule:
             subset = subset[subset[term[0]] == term[1]]
 
+        if len(subset) > 0:
+            state = True
+
         uncovered_data = uncovered_data.drop(subset.index)
         uncovered_data = uncovered_data.reset_index(drop=True)
 
-        return uncovered_data
+        return state, uncovered_data
 
 
     def fit(self, X, y, X_val, y_val):
@@ -213,7 +217,9 @@ class AntMiner2:
         # compute heuristic values
         heuristics = self._initialize_heuristics(uncovered_data, 'class')
 
-        while len(uncovered_data) > self.max_uncovered:
+        state = False
+        count = 0
+        while len(uncovered_data) > self.max_uncovered and count < 50:
 
             if len(uncovered_data) <= self.max_uncovered:
                 uncovered_data = data.copy()
@@ -266,6 +272,7 @@ class AntMiner2:
 
             
             if len(all_rules) == 0:
+                count += 1
                 continue
             
             # choose the best rule
@@ -287,7 +294,14 @@ class AntMiner2:
             #print(f'Rule: {rule_str}, Quality: {best_quality}')
 
             # drop covered instances
-            uncovered_data = self._drop_covered(best_rule, uncovered_data)
+            state, uncovered_data = self._drop_covered(best_rule, uncovered_data)
+            
+            if state == False:
+                count += 1
+            else:
+                count = 0
+                state = False
+
 
             # store convergence
             self.majority = uncovered_data['class'].mode()[0] if len(uncovered_data) > 0 else data['class'].mode()[0]
@@ -374,7 +388,7 @@ class AntMiner2:
         Evaluate the ruleMiner model on the test data.
         """
 
-        y_pred = self.pareto_predict(X)
+        y_pred = self.predict(X)
         tn, fp, fn, tp = confusion_matrix(y_true=y, y_pred=y_pred, labels=['neg', 'pos']).ravel()
 
         accuracy = (tn + tp) / (tn + tp + fn + fp) if (tn + tp + fn + fp) > 0 else 0.0
