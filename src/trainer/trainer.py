@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 from dataclasses import dataclass
 
 sys.path.append("../..")
-from src.algorithms.AntMiner import AntMiner
+from src.algorithms.AntMiner import AntMiner2
 
 
 env = dotenv.find_dotenv()
@@ -41,7 +41,7 @@ def main(args: Args) -> None:
     SAVE_DIR = dotenv.get_key(env, 'SLC_RESULTS_DIR')
     MODELS_DIR = dotenv.get_key(env, 'SLC_MODELS_DIR')
 
-    dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv')
+    dataframe = pd.read_csv(DATA_DIR + f'/{args.dataset}.csv', dtype=str)
 
     X = dataframe.drop('class', axis=1)
     y = dataframe['class']
@@ -59,7 +59,7 @@ def main(args: Args) -> None:
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
     
-            ant_miner = AntMiner(
+            ant_miner = AntMiner2(
                 max_ants=args.max_ants,
                 max_uncovered=args.max_uncovered,
                 min_covers=args.min_covers,
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-folds", type=int, default=5, help="Number of folds for cross-validation")
     parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Fitness objectives for multi-objective optimization")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
-    parser.add_argument("--runs", type=int, default=5, help="Number of runs to average results over")
+    parser.add_argument("--runs", type=int, default=10, help="Number of runs to average results over")
 
     args = parser.parse_args()
     main(args)

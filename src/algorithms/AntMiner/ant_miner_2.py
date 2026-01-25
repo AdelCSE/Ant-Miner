@@ -6,7 +6,7 @@ import time
 from .utils import check_attributes_left, rule_covers_min_examples, select_term, calculate_terms_probs, compute_entropy, assign_class, evaluate_rule, plot_patero_front, update_EP
 from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, confusion_matrix
 
-class AntMiner:
+class AntMiner2:
 
     def __init__(self, 
                  max_ants : int = 3000, 
@@ -213,13 +213,7 @@ class AntMiner:
         # compute heuristic values
         heuristics = self._initialize_heuristics(uncovered_data, 'class')
 
-        #while len(uncovered_data) > self.max_uncovered:
-        start_time = time.time()
-        while True:
-
-            if time.time() - start_time > 30:
-                #print(f"Stopping due to time limit.")
-                break
+        while len(uncovered_data) > self.max_uncovered:
 
             if len(uncovered_data) <= self.max_uncovered:
                 uncovered_data = data.copy()

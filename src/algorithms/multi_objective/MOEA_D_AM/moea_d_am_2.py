@@ -21,7 +21,7 @@ from .patero_front import plot_patero_front
 from .metrics import accuracy, recall, precision, f1_measure, hamming_loss, subset_accuracy, ranking_loss, one_error, coverage, average_precision
 
 
-class MOEA_D_AM():
+class MOEA_D_AM_2():
     """
     Multi-Objective Evolutionary Algorithm based on Decomposition with Ant Colony Optimization (MOEA/D-ACO) 
     for rule discovery in classification tasks.
@@ -218,23 +218,23 @@ class MOEA_D_AM():
         self.init_heuristics(data, labels=labels, terms=terms)
         self.init_pheromones(self.task, terms, labels)
         self.init_neighborhood(self.population, self.neighbors)
-
-        
         
         t = 0
         start_time = time.time()
+        """
         while True:
             if time.time() - start_time > 30:
                 #print(f"Stopping at iteration {t} due to time limit.")
                 break
+        """
         
-        #for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
+        for t in tqdm(range(self.max_iter), desc="Running MOEA/D-AM"):
 
             iteration_points = []
 
             # Check if there is enough uncovered data
             if len(uncovered_data) <= self.max_uncovered:
-                print(f"Early stopping at iteration {t} due to insufficient data.")
+                #print(f"Early stopping at iteration {t} due to insufficient data.")
                 break
 
             # Desirability matrix
@@ -274,15 +274,15 @@ class MOEA_D_AM():
 
             # Fitness evaluation
             for i in range(self.population):
-                fitness, f1_score = fitness_function(
+                fitness, score = fitness_function(
                     data=data, ant=self.colony['ants'][i], labels=labels, task=self.task, objs=self.objs
                 )
                 if self.task == 'single':
                     self.colony['ants'][i]['fitness'] = fitness
-                    self.colony['ants'][i]['f1_score'] = f1_score
+                    self.colony['ants'][i]['score'] = score
                 else:
                     self.colony['ants'][i]['ruleset']['fitness'] = fitness
-                    self.colony['ants'][i]['ruleset']['f1_score'] = f1_score
+                    self.colony['ants'][i]['ruleset']['score'] = score
 
                 iteration_points.append(fitness)
             
@@ -312,15 +312,17 @@ class MOEA_D_AM():
                     task=self.task, objs=self.objs
                 )
 
-            """
-            for i in best_ants_indices:
-                # Drop covered examples from uncovered_data
-                uncovered_data = drop_covered(
-                    best_ant=self.colony['ants'][i],
+            # Drop covered examples from uncovered_data
+            if len(best_ants_indices) > 0:
+                best_ant = self.get_best_ant(self.colony, best_ants_indices)
+                subset = drop_covered(
+                    best_ant=best_ant,
                     data=uncovered_data,
                     task=self.task
                 )
-            """
+                uncovered_data.drop(index=subset.index, inplace=True)
+            
+
             # store convergence
             if self.task == 'single':
                 self.store_convergence(X=data.drop(columns=labels), y=data[labels[0]], X_val=Val_data.drop(columns=labels), y_val=Val_data[labels[0]])
@@ -334,9 +336,24 @@ class MOEA_D_AM():
         #self.ARCHIVE = remove_dominated_rules(self.ARCHIVE)
 
         if self.rulesets == 'subproblem':
-            self.ARCHIVE = [ant for ant in self.ARCHIVE if ant['f1_score'] > 0]
+            self.ARCHIVE = [ant for ant in self.ARCHIVE if ant['score'] > 0]
         
         #pprint.pprint(self.ARCHIVE)
+
+    def get_best_ant(self, colony: dict, best_ants_indices: list[int]) -> dict:
+        """
+        Get the best ant from the colony based on score.
+        """
+        best_ant = None
+        best_score = -1.0
+
+        for i in best_ants_indices:
+            if colony['ants'][i]['score'] > best_score:
+                best_score = colony['ants'][i]['score']
+                best_ant = colony['ants'][i]
+
+        return best_ant
+
 
 
     def store_convergence(self, X, y, X_val, y_val):

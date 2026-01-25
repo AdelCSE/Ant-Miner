@@ -48,7 +48,7 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, rep_list,
             # If neighbor solution better, replace current
             if new_g > ant_g and colony['ants'][i]['rule'][-1][1] == 'pos':
                 colony['ants'][ant_index]['rule'] = new_ruleset[0]
-                colony['ants'][ant_index]['fitness'], colony['ants'][ant_index]['f1_score'] = fitness_function(data=data, ant=colony['ants'][ant_index], labels=['class'], task=task, objs=objs)
+                colony['ants'][ant_index]['fitness'], colony['ants'][ant_index]['score'] = fitness_function(data=data, ant=colony['ants'][ant_index], labels=['class'], task=task, objs=objs)
                 ant_g = new_g
                 best_ruleset = new_ruleset
                 changed_rule = True
@@ -56,7 +56,7 @@ def find_best_neighborhood_rule(colony, data, ant_index, neighborhood, rep_list,
             # If neighbor solution better, replace current
             if new_g > ant_g:
                 colony['ants'][ant_index]['ruleset']['rules'] = [{'rule': rule['rule'], 'scores': rule['scores']} for rule in new_ruleset]
-                colony['ants'][ant_index]['ruleset']['fitness'], colony['ants'][ant_index]['ruleset']['f1_score'] = fitness_function(data=data, ant=colony['ants'][ant_index], labels=labels, task=task, objs=objs)
+                colony['ants'][ant_index]['ruleset']['fitness'], colony['ants'][ant_index]['ruleset']['score'] = fitness_function(data=data, ant=colony['ants'][ant_index], labels=labels, task=task, objs=objs)
                 ant_g = new_g
                 best_ruleset = new_ruleset
                 changed_rule = True

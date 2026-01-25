@@ -1,17 +1,12 @@
 # 1. Define Datasets
-$datasets = @("tictactoe", "hepatitis", "ljubljana", "cargood", "chess", "mushrooms") #, "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
+$datasets = @("segment0") #, "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
 
 # 2. Define Fitness Combinations
-$fitness_groups = @(
-    @("specificity", "sensitivity"),
-    @("confidence", "simplicity"),
-    @("confidence", "specificity"),
-    @("confidence", "sensitivity")
-)
+$f= @("specificity", "sensitivity")
+
 
 # 3. Nested Loop
 foreach ($d in $datasets) {
-    foreach ($f in $fitness_groups) {
         
         Write-Host "--------------------------------------------" -ForegroundColor Cyan
         Write-Host "Dataset: $d"
@@ -23,9 +18,8 @@ foreach ($d in $datasets) {
         # So this executes: python trainer.py --dataset yeast3 --objs confidence simplicity
         
         python trainer.py --dataset $d --objs $f
-        python moea_trainer.py --dataset $d --objs $f
-        python moea_trainer.py --dataset $d --objs $f --archive-type rulesets --rulesets iteration
-    }
+        #python moea_trainer.py --dataset $d --objs $f
+        #python moea_trainer.py --dataset $d --objs $f --archive-type rulesets --rulesets iteration
 }
 
 Write-Host "`nAll experiments completed." -ForegroundColor Green

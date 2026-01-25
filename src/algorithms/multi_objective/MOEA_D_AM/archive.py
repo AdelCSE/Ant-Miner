@@ -14,8 +14,8 @@ def is_duplicate_ruleset(ruleset, archive_rulesets):
     return False
 
 
-def avg_f1(ruleset):
-    return sum(rule["f1_score"] for rule in ruleset) / len(ruleset) if ruleset else 0.0
+def avg_score(ruleset):
+    return sum(rule["score"] for rule in ruleset) / len(ruleset) if ruleset else 0.0
 
 
 def update_archive_rules(colony, archive):
@@ -34,7 +34,7 @@ def update_archive_rules(colony, archive):
 
 def update_archive_iteration_rulesets(colony, archive, ruleset_size):
     best_ants_indices = []
-    sorted_ants = sorted(colony['ants'], key=lambda a: a['f1_score'], reverse=True)
+    sorted_ants = sorted(colony['ants'], key=lambda a: a['score'], reverse=True)
     ruleset = []
 
     for i, ant in enumerate(sorted_ants):
@@ -49,7 +49,7 @@ def update_archive_iteration_rulesets(colony, archive, ruleset_size):
             best_ants_indices.append(i)
 
     if ruleset:
-        archive.append({"ruleset": ruleset, "f1_score": avg_f1(ruleset), "fitness": [sum(f) / len(f) for f in zip(*(r['fitness'] for r in ruleset))]})
+        archive.append({"ruleset": ruleset, "score": avg_score(ruleset), "fitness": [sum(f) / len(f) for f in zip(*(r['fitness'] for r in ruleset))]})
     else:
         best_ants_indices = []
 
@@ -60,7 +60,7 @@ def update_archive_subproblem_rulesets(colony, archive, ruleset_size):
     best_ants_indices = []
 
     if not archive:
-        archive = [{'f1_score': 0.0, 'fitness': [0.0, 0.0], 'ruleset': []} for _ in range(len(colony['ants']))]
+        archive = [{'score': 0.0, 'fitness': [0.0, 0.0], 'ruleset': []} for _ in range(len(colony['ants']))]
 
     for i, ant in enumerate(colony['ants']):
         if not ant['rule'] or ant['rule'][-1][1] != 'pos':
@@ -76,14 +76,14 @@ def update_archive_subproblem_rulesets(colony, archive, ruleset_size):
                 best_ants_indices.append(i)
             ruleset.append(ant)
         else:
-            worst = min(ruleset, key=lambda r: r['f1_score'])
+            worst = min(ruleset, key=lambda r: r['score'])
             if dominates(ant['fitness'], worst['fitness']):
                 ruleset.remove(worst)
                 ruleset.append(ant)
                 best_ants_indices.append(i)
 
         archive[i]['ruleset'] = ruleset
-        archive[i]['f1_score'] = avg_f1(ruleset)
+        archive[i]['score'] = avg_score(ruleset)
         archive[i]['fitness'] = [sum(f) / len(f) for f in zip(*(r['fitness'] for r in ruleset))] if ruleset else [0.0, 0.0]
 
     return best_ants_indices, archive

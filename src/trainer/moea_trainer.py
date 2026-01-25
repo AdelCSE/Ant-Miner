@@ -12,7 +12,7 @@ from sklearn.model_selection import StratifiedKFold
 from skmultilearn.model_selection import IterativeStratification
 
 sys.path.append("../..")
-from src.algorithms.multi_objective.MOEA_D_AM import MOEA_D_AM
+from src.algorithms.multi_objective.MOEA_D_AM import MOEA_D_AM_2
 
 env = dotenv.find_dotenv()
 
@@ -77,7 +77,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
             y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-            moea_d_aco = MOEA_D_AM(
+            moea_d_aco = MOEA_D_AM_2(
                 task=args.task,
                 population=args.population,
                 neighbors=args.neighbors,
@@ -155,7 +155,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
             X, y, test_size=0.3, random_state=args.random_state
         )
 
-        moea_d_aco = MOEA_D_AM(
+        moea_d_aco = MOEA_D_AM_2(
             task = args.task,
             population=args.population,
             neighbors=args.neighbors,
@@ -343,7 +343,7 @@ if __name__ == "__main__":
     parser.add_argument("--folds", type=int, default=5, help="Number of folds for cross-validation")
     parser.add_argument("--random-state", type=int, default=None, help="Random state for reproducibility")
 
-    parser.add_argument("--runs", type=int, default=5, help="Number of independent runs")
+    parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
 
     parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Fitness objectives for multi-objective optimization")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name")

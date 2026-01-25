@@ -1,5 +1,7 @@
 .env
 datasets
+models
+models/**
 datasets/**
 results
 results/**

@@ -105,16 +105,16 @@ def fitness_function(data: pd.DataFrame, ant: dict, labels: list[str], task: str
     #fitness_f1_macro = sum(total_f1_macro) / len(total_f1_macro) if total_f1_macro else 0.0
     #fitness_f1_micro = sum(total_f1_micro) / len(total_f1_micro) if total_f1_micro else 0.0
 
-    f1_score = (2 * fitness_sensitivity * fitness_confidence) / (fitness_sensitivity + fitness_confidence) if (fitness_sensitivity + fitness_confidence) > 0 else 0.0
+    #f1_score = (2 * fitness_sensitivity * fitness_confidence) / (fitness_sensitivity + fitness_confidence) if (fitness_sensitivity + fitness_confidence) > 0 else 0.0
 
     if 'sensitivity' in objs and 'specificity' in objs:
-        return [fitness_specificity, fitness_sensitivity], f1_score
+        return [fitness_specificity, fitness_sensitivity], fitness_specificity * fitness_sensitivity
     elif 'simplicity' in objs and 'confidence' in objs:
-        return [fitness_confidence, fitness_simplicity], f1_score
+        return [fitness_confidence, fitness_simplicity], fitness_confidence * fitness_simplicity
     elif 'confidence' in objs and 'specificity' in objs:
-        return [fitness_confidence, fitness_specificity], f1_score
+        return [fitness_confidence, fitness_specificity], fitness_confidence * fitness_specificity
     elif 'confidence' in objs and 'sensitivity' in objs:
-        return [fitness_confidence, fitness_sensitivity], f1_score
+        return [fitness_confidence, fitness_sensitivity], fitness_confidence * fitness_sensitivity
     else:
         raise ValueError("Unsupported combination of objectives.")
 

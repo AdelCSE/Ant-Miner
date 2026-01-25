@@ -166,8 +166,8 @@ def update_EP(rules, fitnesses, EP):
             EP = [ep_ant for ep_ant in EP if not dominates(fitnesses[i], ep_ant["fitness"])]
 
             # Add the new non-dominated solution
-
             if not any(set(ep_ant["rule"]) == set(ant) for ep_ant in EP):
-                EP.append({'rule': ant, 'fitness': fitnesses[i]})
+                score = fitnesses[i][0] * fitnesses[i][1]
+                EP.append({'rule': ant, 'fitness': fitnesses[i], 'score': score})
 
     return EP

@@ -46,7 +46,7 @@ def predict_mlc(archive, data: pd.DataFrame, labels: list[str], priors: dict[str
     predictions = np.zeros((n_samples, n_labels), dtype=int)
     scores = np.zeros((n_samples, n_labels), dtype=float)
     # sort rulesets by quality
-    archive = sorted(archive, key=lambda x: x['ruleset']['f1_score'], reverse=True)
+    archive = sorted(archive, key=lambda x: x['ruleset']['score'], reverse=True)
 
     triggered = {
         'rules': [],
@@ -99,7 +99,7 @@ def select_best(archive):
     """
     Selects the best rule from the archive based on the highest F1 score.
     """
-    return max(archive, key=lambda ant: ant['f1_score'])
+    return max(archive, key=lambda ant: ant['score'])
 
 
 def select_closest(archive):
@@ -140,7 +140,7 @@ def predict_function(X, archive, archive_type, prediction_strat, labels, priors,
     
     else:
         if archive_type == 'rules':
-            archive = sorted(archive, key=lambda ant: ant['f1_score'], reverse=True)
+            archive = sorted(archive, key=lambda ant: ant['score'], reverse=True)
     
             if prediction_strat == 'all':
                 y_preds, triggered_rules = predict(X, archive)
@@ -178,12 +178,12 @@ def predict_function(X, archive, archive_type, prediction_strat, labels, priors,
     
             elif prediction_strat == 'best':
                 best_ruleset = select_best(archive)
-                best_rules = sorted(best_ruleset['ruleset'], key=lambda ant: ant['f1_score'], reverse=True)
+                best_rules = sorted(best_ruleset['ruleset'], key=lambda ant: ant['score'], reverse=True)
                 y_preds, triggered_rules = predict(X, best_rules)
     
             elif prediction_strat == 'reference':
                 closest_ruleset = min(archive, key=average_distance_to_ideal)
-                best_rules = sorted(closest_ruleset['ruleset'], key=lambda ant: ant['f1_score'], reverse=True)
+                best_rules = sorted(closest_ruleset['ruleset'], key=lambda ant: ant['score'], reverse=True)
                 y_preds, triggered_rules = predict(X, best_rules)
 
     return pd.Series(y_preds, index=X.index), scores, triggered_rules

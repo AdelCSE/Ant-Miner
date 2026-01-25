@@ -96,7 +96,6 @@ def drop_covered(best_ant : dict, data : pd.DataFrame, task: str) -> pd.DataFram
     """
     Drop the instances covered by the best ant.
     """
-    
 
     if task == 'single':
         rules = [best_ant['rule']]
@@ -108,9 +107,7 @@ def drop_covered(best_ant : dict, data : pd.DataFrame, task: str) -> pd.DataFram
         for term in best_rule:
             subset = subset[subset[term[0]] == term[1]]
             
-        data = data.drop(subset.index).reset_index(drop=True)
-
-    return data
+    return subset
 
 
 def remove_dominated_rules(archive):
