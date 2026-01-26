@@ -255,17 +255,35 @@ def main(args: Args) -> None:
     os.makedirs(f"{MODELS_DIR}/MOEAAM2_IRS/", exist_ok=True)
     os.makedirs(f"{RESULTS_DIR}/MOEAAM2_SRS/", exist_ok=True)
     os.makedirs(f"{MODELS_DIR}/MOEAAM2_SRS/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_DC/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOEAAM2_DC/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_IRS_DC/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOEAAM2_IRS_DC/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_SRS_DC/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOEAAM2_SRS_DC/", exist_ok=True)
 
     if args.archive_type == 'rules':
-        csv_path = f"{RESULTS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.csv"
-        json_path = f"{MODELS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.json"
+        if args.drop_covered:
+            csv_path = f"{RESULTS_DIR}/MOEAAM2_DC/{args.dataset}_{objs_str}.csv"
+            json_path = f"{MODELS_DIR}/MOEAAM2_DC/{args.dataset}_{objs_str}.json"
+        else:
+            csv_path = f"{RESULTS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.csv"
+            json_path = f"{MODELS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.json"
     else:
         if args.rulesets == 'iteration':
-            csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.csv"
-            json_path = f"{MODELS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.json"
+            if args.drop_covered:
+                csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS_DC/{args.dataset}_{objs_str}.csv"
+                json_path = f"{MODELS_DIR}/MOEAAM2_IRS_DC/{args.dataset}_{objs_str}.json"
+            else:
+                csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.csv"
+                json_path = f"{MODELS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.json"
         else:
-            csv_path = f"{RESULTS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.csv"
-            json_path = f"{MODELS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.json"
+            if args.drop_covered:
+                csv_path = f"{RESULTS_DIR}/MOEAAM2_SRS_DC/{args.dataset}_{objs_str}.csv"
+                json_path = f"{MODELS_DIR}/MOEAAM2_SRS_DC/{args.dataset}_{objs_str}.json"
+            else:
+                csv_path = f"{RESULTS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.csv"
+                json_path = f"{MODELS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.json"
 
     all_results.to_csv(csv_path, index=False)
     
@@ -287,7 +305,7 @@ if __name__ == "__main__":
     # Algorithm Parameters
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (without .csv)")
     parser.add_argument("--population", type=int, default=6, help="Number of subproblems (Decomposition size)")
-    parser.add_argument("--ants", type=int, default=40, help="Number of ants competing per subproblem")
+    parser.add_argument("--ants", type=int, default=50, help="Number of ants competing per subproblem")
     parser.add_argument("--neighbors", type=int, default=3, help="T - Neighborhood size")
     parser.add_argument("--groups", type=int, default=2, help="Number of weight groups")
     
