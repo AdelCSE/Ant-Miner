@@ -34,6 +34,7 @@ class Args:
     archive_type : str
     rulesets : str
     prediction_strat : str
+    drop_covered : bool
 
     cross_val : bool
     folds : int
@@ -85,6 +86,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
                 archive_type=args.archive_type,
                 prediction_strat=args.prediction_strat,
                 rulesets=args.rulesets,
+                drop_covered=args.drop_covered,
                 objs=objs,
                 random_state=args.random_state,
                 ants_per_subproblem=args.ants
@@ -158,6 +160,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
             archive_type=args.archive_type,
             prediction_strat=args.prediction_strat,
             rulesets=args.rulesets,
+            drop_covered=args.drop_covered,
             objs=objs,
             random_state=args.random_state,
             ants_per_subproblem=args.ants
@@ -257,7 +260,7 @@ def main(args: Args) -> None:
         csv_path = f"{RESULTS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.csv"
         json_path = f"{MODELS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.json"
     else:
-        if args.archive_type == 'iteration':
+        if args.rulesets == 'iteration':
             csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.csv"
             json_path = f"{MODELS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.json"
         else:
@@ -302,11 +305,12 @@ if __name__ == "__main__":
     parser.add_argument("--archive-type", type=str, default="rules", choices=["rules", "rulesets"])
     parser.add_argument("--rulesets", type=str, default=None, choices=[None, 'iteration', 'subproblem'])
     parser.add_argument("--prediction-strat", type=str, default="all", choices=["all", "best", "voting"])
+    parser.add_argument("--drop-covered", type=int, default=0, help="1=Drop covered examples, 0=Do not drop")
     
     # Experiment Parameters
     parser.add_argument("--cross-val", type=int, default=1, help="1=CV, 0=Train/Test")
     parser.add_argument("--folds", type=int, default=5, help="Number of CV folds")
-    parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
+    parser.add_argument("--runs", type=int, default=5, help="Number of independent runs")
     parser.add_argument("--random-state", type=int, default=None)
     parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Objectives list")
 

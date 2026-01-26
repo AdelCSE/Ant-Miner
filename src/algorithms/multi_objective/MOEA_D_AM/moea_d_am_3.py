@@ -1,11 +1,9 @@
 import math
-import pprint
-import time
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
-from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
+from sklearn.metrics import confusion_matrix
 
 # Import algorithm components
 from .colony2 import create_colony
@@ -44,9 +42,10 @@ class MOEA_D_AM_3():
                  archive_type: str,
                  prediction_strat: str,
                  rulesets: str,
+                 drop_covered: int,
                  objs: list,
                  random_state: int = None,
-                 ants_per_subproblem: int = 50 
+                 ants_per_subproblem: int = 50
     ) -> None:
         
         self.task = task
@@ -90,6 +89,7 @@ class MOEA_D_AM_3():
         self.archive_type = archive_type
         self.rulesets = rulesets
         self.prediction_strat = prediction_strat
+        self.drop_covered = drop_covered
 
         self.reference_point = np.array([0.0, 0.0])
 
@@ -114,6 +114,7 @@ class MOEA_D_AM_3():
             self.lambda_groups[group].append(weight)
             self.ant_groups[i] = group
 
+
     def init_heuristics(self, data : pd.DataFrame, labels: list[str], terms: list[tuple]):
         """Initialize heuristic information (Information Gain)."""
         self.heuristics = {}
@@ -134,13 +135,15 @@ class MOEA_D_AM_3():
         total = sum(numerator_terms.values())
         for term, value in numerator_terms.items():
             self.heuristics[term] = value / total if total != 0 else 0
+            
 
-    def init_pheromones(self, task: str, terms : list, labels: list[str] = []):
+    def init_pheromones(self, terms : list):
         """Initialize pheromones."""
         self.pheromones = {}
         pheromone = {term: 1.0 / len(terms) for term in terms}
         for k in range(self.groups):
             self.pheromones[k] = pheromone
+
 
     def init_neighborhood(self, population: int, neighbors: int):
         """Initialize circular neighborhoods."""
@@ -151,6 +154,7 @@ class MOEA_D_AM_3():
             if neighbors % 2 == 0:
                 indices = indices[:-1]
             self.neighborhoods[i] = np.array(indices)
+
 
     def run(self, data: pd.DataFrame, labels: list[str], Val_data: pd.DataFrame = None):
 
@@ -165,7 +169,7 @@ class MOEA_D_AM_3():
         # Initialize colony parameters
         self.init_weights()
         self.init_heuristics(data, labels=labels, terms=terms)
-        self.init_pheromones(self.task, terms, labels)
+        self.init_pheromones(terms)
         self.init_neighborhood(self.population, self.neighbors)
         
         for _ in tqdm(range(self.max_iter), desc="Training"):
@@ -175,7 +179,7 @@ class MOEA_D_AM_3():
             if len(uncovered_data) <= self.max_uncovered:
                 break
 
-            # 1. Calculate Desirability (Phi) for all subproblems
+            # 1. Calculate Desirability Matrix (Phi)
             phi_matrix = {}
             for i in range(self.population):
                 phi_matrix[i] = {}
@@ -183,7 +187,7 @@ class MOEA_D_AM_3():
                 for term in terms:
                     phi_matrix[i][term] = (self.pheromones[g][term] ** self.alpha) * (self.heuristics[term] ** self.beta)
 
-            # 2. Generate Candidate Pool (Returns List of Lists)
+            # 2. Generate Candidate Pool
             candidate_colony = create_colony(
                 data=uncovered_data, attributes=data.drop(columns=labels).columns.tolist(),
                 labels=labels, terms=terms, population=self.population, gamma=self.gamma, phi=phi_matrix, 
@@ -191,7 +195,7 @@ class MOEA_D_AM_3():
                 ants_per_subproblem=self.ants_per_subproblem 
             )
 
-            # 3. Tournament Selection (Filter Candidates)
+            # 3. Tournament Selection
             self.colony = {'ants': []}
 
             for i in range(self.population):
@@ -208,14 +212,19 @@ class MOEA_D_AM_3():
                         )
 
                     # B. Fitness
-                    fitness, score = fitness_function(
-                        data=data, ant=ant, labels=labels, task=self.task, objs=self.objs
-                    )
+                    if self.archive_type == 'rules' or self.rulesets == 'subproblem':
+                        fitness, score = fitness_function(
+                            data=data, ant=ant, labels=labels, task=self.task, objs=self.objs
+                        )
+                    else:
+                        fitness, score = fitness_function(
+                            data=uncovered_data, ant=ant, labels=labels, task=self.task, objs=self.objs
+                        )
                     
                     ant['fitness'] = fitness
                     ant['score'] = score
 
-                    # C. Select Best for Subproblem
+                    # C. Select Best for subproblem
                     if score > best_score:
                         best_score = score
                         best_ant = ant
@@ -229,11 +238,11 @@ class MOEA_D_AM_3():
                 colony=self.colony, archive=self.ARCHIVE, rulesets=self.rulesets,
             )
 
-            # Update reference point
+            # 5. Update reference point
             if self.decomposition == 'tchebycheff':
                 self.reference_point = update_reference_point(self.reference_point, self.colony, self.task, maximize=True)
 
-            # 5. Update Pheromones
+            # 6. Update Pheromones
             self.pheromones, self.tau_min, self.tau_max = update_pheromone(
                 colony=self.colony, pheromones=self.pheromones, best_ants=best_ants_indices, 
                 p=self.p, ant_groups=self.ant_groups, lambda_weights=self.lambda_weights, 
@@ -241,7 +250,7 @@ class MOEA_D_AM_3():
                 labels=labels, task=self.task
             )
 
-            # 6. Neighborhood Update
+            # 7. Neighborhood Update
             for i in range(self.population):
                 self.colony, self.replacing_solution = find_best_neighborhood_rule(
                     colony=self.colony, data=data, ant_index=i, neighborhood=self.neighborhoods,
@@ -250,8 +259,9 @@ class MOEA_D_AM_3():
                     task=self.task, objs=self.objs
                 )
 
-            # 7. Drop Covered Examples (Sequential Covering)
-            if len(best_ants_indices) > 0:
+            # 8. Drop Covered Examples (Sequential Covering)
+            
+            if self.drop_covered and len(best_ants_indices) > 0:
                 best_ant = self.get_best_ant(self.colony, best_ants_indices)
                 subset = drop_covered(
                     best_ant=best_ant,
@@ -260,7 +270,7 @@ class MOEA_D_AM_3():
                 )
                 uncovered_data.drop(index=subset.index, inplace=True)
             
-            # Store history
+            # 9. Store history
             self.store_convergence(X=data.drop(columns=labels), y=data[labels[0]], X_val=Val_data.drop(columns=labels), y_val=Val_data[labels[0]])
             
         self.all_points.extend(iteration_points)

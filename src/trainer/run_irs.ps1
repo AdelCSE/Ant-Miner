@@ -1,5 +1,5 @@
 # 1. Define Datasets
-$datasets = @("cargood", "chess") # , "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
+$datasets = @("mushrooms", "tictactoe", "hepatitis", "ljubljana", "cargood", "chess") # , "zoo3", "flare", "yeast3", "abalone19", "segment0", "pageblocks"
 
 # 2. Define Fitness Combinations
 $f= @("specificity", "sensitivity")
@@ -13,8 +13,7 @@ foreach ($d in $datasets) {
         Write-Host "--------------------------------------------" -ForegroundColor Cyan
         
         #python trainer.py --dataset $d --objs $f
-        python moea2_trainer.py --dataset $d --objs $f
-        python moea2_trainer.py --dataset $d --objs $f --archive-type rulesets --rulesets subproblem
+        python moea2_trainer.py --dataset $d --objs $f --archive-type rulesets --rulesets iteration
 }
 
 Write-Host "`nAll experiments completed." -ForegroundColor Green
