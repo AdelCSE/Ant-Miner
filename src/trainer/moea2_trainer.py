@@ -253,6 +253,10 @@ def main(args: Args) -> None:
     os.makedirs(f"{RESULTS_DIR}/MOAM_M_DC/", exist_ok=True)
     os.makedirs(f"{RESULTS_DIR}/MOAM_P/", exist_ok=True)
     os.makedirs(f"{RESULTS_DIR}/MOAM_M/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOAM_P_DC/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOAM_M_DC/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOAM_P/", exist_ok=True)
+    os.makedirs(f"{MODELS_DIR}/MOAM_M/", exist_ok=True)
 
 
     if args.archive_type == 'rules':
@@ -314,7 +318,7 @@ if __name__ == "__main__":
     # Experiment Parameters
     parser.add_argument("--cross-val", type=int, default=1, help="1=CV, 0=Train/Test")
     parser.add_argument("--folds", type=int, default=5, help="Number of CV folds")
-    parser.add_argument("--runs", type=int, default=10, help="Number of independent runs")
+    parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
     parser.add_argument("--random-state", type=int, default=None)
     parser.add_argument("--objs", nargs='+', type=str, default=['confidence', 'simplicity'], help="Objectives list")
 

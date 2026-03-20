@@ -1,5 +1,5 @@
 # 1. Define Datasets
-$datasets = @("tictactoe", "mushrooms", "hepatitis", "ljubljana", "chess", "cargood") #("flare", "zoo3", "yeast3", "segment0", "pageblocks", "abalone19")
+$datasets = @("tictactoe", "mushrooms", "hepatitis") #("flare", "zoo3", "yeast3", "segment0", "pageblocks", "abalone19")
 
 # 2. Define Fitness Combinations
 $f = @("confidence", "simplicity")
@@ -35,12 +35,22 @@ foreach ($d in $datasets) {
                 "--population", $cfg.pop,
                 "--ant", $cfg.ant
             )
+            $args2 = @(
+                "--dataset", $d,
+                "--objs", $f,
+                "--archive-type", $archive,
+                "--population", $cfg.pop,
+                "--ant", $cfg.ant,
+                "--drop-covered", 0
+            )
                 
             if ($archive -ne "rules") {
                 $args += @("--rulesets", "subproblem")
+                $args2 += @("--rulesets", "subproblem")
             }
             
             python moea2_trainer.py @args
+            python moea2_trainer.py @args2
         }
     }
 }

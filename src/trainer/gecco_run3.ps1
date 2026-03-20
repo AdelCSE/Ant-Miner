@@ -1,5 +1,5 @@
 # 1. Define Datasets
-$datasets = @("ljubljana", "chess", "cargood")
+$datasets = @("yeast3", "segment0", "pageblocks")
 
 # 2. Define Fitness Combinations
 $f = @("confidence", "simplicity")
