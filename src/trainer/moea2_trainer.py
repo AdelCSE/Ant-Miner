@@ -132,7 +132,7 @@ def run_once(args: Args, X, y, labels, run_id: int, archive: dict, objs: list):
                 ts_metrics[5], ts_metrics[6], ts_metrics[7], fold_time
             ]
 
-            print(f"Fold {k+1}/{args.folds} - Test Acc: {ts_metrics[0]*100:.2f}% | F1: {ts_metrics[1]*100:.2f}% | Rules: {ts_metrics[5]}")
+            print(f"Fold {k+1}/{args.folds} - Acc: {ts_metrics[0]*100:.2f}% | F1: {ts_metrics[1]*100:.2f}% | Recall: {ts_metrics[2]*100:.2f}% | Precision: {ts_metrics[3]*100:.2f}% | Specificity: {ts_metrics[4]*100:.2f}% | Rules: {ts_metrics[5]}")
 
         return results, archive
 
@@ -233,8 +233,8 @@ def main(args: Args) -> None:
     all_results = pd.DataFrame()
     archive = {}
 
-    print(f"Starting {args.runs} run(s) on {args.dataset}...")
-    print(f"Configuration: {args.ants} ants per subproblem, {args.population} subproblems.")
+    print(f"Starting {args.runs} run(s) on <{args.dataset}>...")
+    print(f"Configuration: MOAM_{"P" if args.archive_type == 'rules' else "M"}{"_DC" if args.drop_covered else ""} | {args.population} subproblems / {args.ants} ants per subproblem")
 
     for run_id in range(1, args.runs+1):
         print(f'\n--- Run {run_id} ---')
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     parser.add_argument("--archive-type", type=str, default="rules", choices=["rules", "rulesets"])
     parser.add_argument("--rulesets", type=str, default=None, choices=[None, 'iteration', 'subproblem'])
     parser.add_argument("--prediction-strat", type=str, default="all", choices=["all", "best", "voting"])
-    parser.add_argument("--drop-covered", type=int, default=0, help="1=Drop covered examples, 0=Do not drop")
+    parser.add_argument("--drop-covered", type=int, default=1, help="1=Drop covered examples, 0=Do not drop")
     
     # Experiment Parameters
     parser.add_argument("--cross-val", type=int, default=1, help="1=CV, 0=Train/Test")

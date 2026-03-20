@@ -321,9 +321,9 @@ if __name__ == "__main__":
     
     # extend to multi-label
     parser.add_argument("--task", type=str, default="single", choices=["single", "multi"])
-    parser.add_argument("--population", type=int, default=50, help="Population size")
-    parser.add_argument("--neighbors", type=int, default=10, help="Number of neighbors")
-    parser.add_argument("--groups", type=int, default=5, help="Number of groups")
+    parser.add_argument("--population", type=int, default=300, help="Population size")
+    parser.add_argument("--neighbors", type=int, default=5, help="Number of neighbors")
+    parser.add_argument("--groups", type=int, default=2, help="Number of groups")
     parser.add_argument("--min-examples", type=int, default=10, help="Minimum examples per rule")
     parser.add_argument("--max-uncovered", type=int, default=10, help="Number of examples left uncovered to stop training")
     parser.add_argument("--max-iter", type=int, default=100, help="Number of iterations")
