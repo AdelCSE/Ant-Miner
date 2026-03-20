@@ -249,41 +249,27 @@ def main(args: Args) -> None:
     # Save Files
     objs_str = '_'.join([obj[:4] for obj in args.objs])
     
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2/", exist_ok=True)
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_IRS/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2_IRS/", exist_ok=True)
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_SRS/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2_SRS/", exist_ok=True)
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_DC/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2_DC/", exist_ok=True)
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_IRS_DC/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2_IRS_DC/", exist_ok=True)
-    os.makedirs(f"{RESULTS_DIR}/MOEAAM2_SRS_DC/", exist_ok=True)
-    os.makedirs(f"{MODELS_DIR}/MOEAAM2_SRS_DC/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOAM_P_DC/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOAM_M_DC/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOAM_P/", exist_ok=True)
+    os.makedirs(f"{RESULTS_DIR}/MOAM_M/", exist_ok=True)
+
 
     if args.archive_type == 'rules':
         if args.drop_covered:
-            csv_path = f"{RESULTS_DIR}/MOEAAM2_DC/{args.dataset}_{objs_str}.csv"
-            json_path = f"{MODELS_DIR}/MOEAAM2_DC/{args.dataset}_{objs_str}.json"
+            csv_path = f"{RESULTS_DIR}/MOAM_P_DC/{args.dataset}_S{args.population}_A{args.ants}.csv"
+            json_path = f"{MODELS_DIR}/MOAM_P_DC/{args.dataset}_S{args.population}_A{args.ants}.json"
         else:
-            csv_path = f"{RESULTS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.csv"
-            json_path = f"{MODELS_DIR}/MOEAAM2/{args.dataset}_{objs_str}.json"
+            csv_path = f"{RESULTS_DIR}/MOAM_P/{args.dataset}_S{args.population}_A{args.ants}.csv"
+            json_path = f"{MODELS_DIR}/MOAM_P/{args.dataset}_S{args.population}_A{args.ants}.json"
     else:
         if args.rulesets == 'iteration':
             if args.drop_covered:
-                csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS_DC/{args.dataset}_{objs_str}.csv"
-                json_path = f"{MODELS_DIR}/MOEAAM2_IRS_DC/{args.dataset}_{objs_str}.json"
+                csv_path = f"{RESULTS_DIR}/MOAM_M_DC/{args.dataset}_S{args.population}_A{args.ants}.csv"
+                json_path = f"{MODELS_DIR}/MOAM_M_DC/{args.dataset}_S{args.population}_A{args.ants}.json"
             else:
-                csv_path = f"{RESULTS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.csv"
-                json_path = f"{MODELS_DIR}/MOEAAM2_IRS/{args.dataset}_{objs_str}.json"
-        else:
-            if args.drop_covered:
-                csv_path = f"{RESULTS_DIR}/MOEAAM2_SRS_DC/{args.dataset}_{objs_str}.csv"
-                json_path = f"{MODELS_DIR}/MOEAAM2_SRS_DC/{args.dataset}_{objs_str}.json"
-            else:
-                csv_path = f"{RESULTS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.csv"
-                json_path = f"{MODELS_DIR}/MOEAAM2_SRS/{args.dataset}_{objs_str}.json"
+                csv_path = f"{RESULTS_DIR}/MOAM_M/{args.dataset}_S{args.population}_A{args.ants}.csv"
+                json_path = f"{MODELS_DIR}/MOAM_M/{args.dataset}_S{args.population}_A{args.ants}.json"
 
     all_results.to_csv(csv_path, index=False)
     
@@ -306,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (without .csv)")
     parser.add_argument("--population", type=int, default=6, help="Number of subproblems (Decomposition size)")
     parser.add_argument("--ants", type=int, default=50, help="Number of ants competing per subproblem")
-    parser.add_argument("--neighbors", type=int, default=3, help="T - Neighborhood size")
+    parser.add_argument("--neighbors", type=int, default=6, help="T - Neighborhood size")
     parser.add_argument("--groups", type=int, default=2, help="Number of weight groups")
     
     parser.add_argument("--min-examples", type=int, default=10, help="Min coverage per rule")
@@ -328,9 +314,9 @@ if __name__ == "__main__":
     # Experiment Parameters
     parser.add_argument("--cross-val", type=int, default=1, help="1=CV, 0=Train/Test")
     parser.add_argument("--folds", type=int, default=5, help="Number of CV folds")
-    parser.add_argument("--runs", type=int, default=5, help="Number of independent runs")
+    parser.add_argument("--runs", type=int, default=10, help="Number of independent runs")
     parser.add_argument("--random-state", type=int, default=None)
-    parser.add_argument("--objs", nargs='+', type=str, default=['specificity', 'sensitivity'], help="Objectives list")
+    parser.add_argument("--objs", nargs='+', type=str, default=['confidence', 'simplicity'], help="Objectives list")
 
     args = parser.parse_args()
     main(args)
